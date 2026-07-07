@@ -18,7 +18,7 @@ const SHORT = {
 };
 
 /* ═══════════════════════════════════
-   SMART ANALYSIS — 3 personalized insights based on player's actual choices
+   ANALYSIS PARAGRAPH — flowing editorial text
 ═══════════════════════════════════ */
 function buildAnalysis(withDelta, deficit) {
   const get = id => withDelta.find(c => c.id === id);
@@ -40,130 +40,63 @@ function buildAnalysis(withDelta, deficit) {
 
   const sorted   = [...withDelta].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   const topMover = sorted[0];
-  const topDown  = sorted.filter(c => c.delta <= -4)[0];
+  const topDown  = sorted.filter(c => c.delta <= -4 && c.id !== "defense")[0];
 
-  /* ── ROW 1: Budget Character ── */
-  let ins1;
+  const parts = [];
+
+  /* ── משפט 1: אופי התקציב ── */
   if (defDelta >= 20) {
-    const src = topDown && topDown.id !== "defense"
-      ? `${topDown.shortLabel} ספג את הקיצוץ.`
-      : `מומן מגירעון גבוה.`;
-    ins1 = {
-      emoji: "🛡️", label: "תקציב לחימה",
-      value: `+${defDelta} מיליארד לביטחון`,
-      context: `${defPct}% מהתמ"ג על ביטחון — בין 3 המדינות הגבוהות ביותר בעולם. ${src}`,
-    };
+    const src = topDown
+      ? `${topDown.shortLabel} ספג קיצוץ של ${Math.abs(topDown.delta)} מיליארד`
+      : `הגירעון מממן את ההפרש`;
+    parts.push(`תוספת של ${defDelta} מיליארד לביטחון מציבה את ישראל על ${defPct}% מהתמ"ג — בין שלוש המדינות הגבוהות ביותר בעולם; ${src}.`);
   } else if (defDelta >= 8) {
-    ins1 = {
-      emoji: "🛡️", label: "חיזוק ביטחוני",
-      value: `+${defDelta} מיליארד לביטחון`,
-      context: `${defPct}% מהתמ"ג — מעל ישראל היום (5.9%). ${topDown && topDown.id !== "defense" ? `${topDown.shortLabel} שילם את המחיר (${topDown.delta}M).` : `נטען מגירעון.`}`,
-    };
+    const note = topDown ? `; ${topDown.shortLabel} שילם את המחיר` : ``;
+    parts.push(`${defDelta} מיליארד נוספים לביטחון מביאים את ישראל ל-${defPct}% מהתמ"ג, מעל הרמה הנוכחית (5.9%)${note}.`);
   } else if (defDelta <= -15 && civilianDelta >= 10) {
-    ins1 = {
-      emoji: "🕊️", label: "מביטחון לאזרחי",
-      value: `${defDelta} → +${civilianDelta} מיליארד`,
-      context: `${Math.abs(defDelta)} מיליארד מועברים מביטחון לשירותים חברתיים — העברה שאף ממשלה ישראלית לא ביצעה ב-20 שנה.`,
-    };
+    parts.push(`${Math.abs(defDelta)} מיליארד מועברים מביטחון לשירותים אזרחיים — העברת משאבים שאף ממשלה ישראלית לא ביצעה ב-20 שנה.`);
   } else if (defDelta <= -8) {
-    ins1 = {
-      emoji: "🕊️", label: "ריסון ביטחוני",
-      value: `${defDelta} מיליארד מביטחון`,
-      context: `${defPct}% מהתמ"ג — נמוך מהנוכחי (5.9%). ${civilianDelta > 0 ? `${civilianDelta} מיליארד פנויים לאזרחי.` : `הקיצוץ לא הופנה לשירותים.`}`,
-    };
+    const note = civilianDelta > 5 ? `; ${civilianDelta} מיליארד הופנו לשירותים אזרחיים` : ``;
+    parts.push(`ריסון ביטחוני של ${Math.abs(defDelta)} מיליארד מוריד את ישראל ל-${defPct}% מהתמ"ג${note}.`);
   } else if (civilianDelta >= 20) {
-    ins1 = {
-      emoji: "🏗️", label: "השקעה אזרחית",
-      value: `+${civilianDelta} מיליארד לאזרחי`,
-      context: `${hlthEduPct}% מהתמ"ג לבריאות+חינוך — מתקרב לממוצע OECD (10.5%). ${deficit > 5.5 ? `הגירעון ${deficit}% הוא המחיר.` : `בשילוב עם גירעון סביר — נדיר.`}`,
-    };
+    parts.push(`${civilianDelta} מיליארד נוספים לשירותים האזרחיים — ביטחון נשמר על ${defPct}% מהתמ"ג.`);
   } else if (totalDelta <= -15) {
-    ins1 = {
-      emoji: "✂️", label: "תקציב צנע",
-      value: `${totalDelta} מיליארד בסה"כ`,
-      context: `קיצוץ כולל — ממשל מינימליסטי. ${deficit < BOI_TARGET ? `גירעון ${deficit}%: מתחת ליעד בנק ישראל לראשונה בשנים.` : `אבל הגירעון ${deficit}% נשאר גבוה.`}`,
-    };
+    parts.push(`קיצוץ כולל של ${Math.abs(totalDelta)} מיליארד — ממשל מינימליסטי שמוציא פחות מהממשלה הנוכחית.`);
   } else if (topMover && Math.abs(topMover.delta) >= 6) {
-    const dir = topMover.delta > 0 ? "+" : "";
-    ins1 = {
-      emoji: topMover.emoji, label: `${topMover.shortLabel} — ההימור הגדול`,
-      value: `${dir}${topMover.delta} מיליארד`,
-      context: `${topMover.shortLabel} קיבל את השינוי הגדול ביותר. ${topDown && topDown.id !== topMover.id ? `מומן מ: ${topDown.shortLabel} (${topDown.delta}M).` : topMover.delta > 0 ? `מומן מגירעון.` : `חיסכון שהופנה לגירעון.`}`,
-    };
+    const dir = topMover.delta > 0 ? `+` : ``;
+    const note = topDown
+      ? `, על חשבון ${topDown.shortLabel} (${topDown.delta} מיליארד)`
+      : topMover.delta > 0 ? `, מומן מגירעון` : ``;
+    parts.push(`ההימור הגדול: ${dir}${topMover.delta} מיליארד ל${topMover.shortLabel}${note}.`);
   } else {
-    ins1 = {
-      emoji: "⚖️", label: "שינוי שמרני",
-      value: `±${Math.abs(totalDelta)} מיליארד`,
-      context: `בחירות קרובות לתקציב הממשלה — ללא הרפתקאות. הגירעון ${deficit}% (ממשלה: ${GOV_DEFICIT}%).`,
-    };
+    parts.push(`בחירות שמרניות — רוב הקטגוריות קרובות לתקציב הממשלה הנוכחית.`);
   }
 
-  /* ── ROW 2: Key Trade-Off ── */
-  let ins2;
-  const bigSecCivTrade = Math.abs(defDelta) >= 8 && Math.abs(civilianDelta) >= 8;
-  if (bigSecCivTrade && defDelta > 0 && civilianDelta < 0) {
-    ins2 = {
-      emoji: "⚖️", label: "ביטחון על חשבון רווחה",
-      value: `+${defDelta} / ${civilianDelta} מיליארד`,
-      context: `ביטחון עלה ב-${defDelta}, האזרחי ירד ב-${Math.abs(civilianDelta)}. סדר עדיפויות ברור — ישראל במצב מלחמה.`,
-    };
-  } else if (bigSecCivTrade && defDelta < 0 && civilianDelta > 0) {
-    ins2 = {
-      emoji: "⚖️", label: "מאבטחים פחות, חיים יותר",
-      value: `${defDelta} → +${civilianDelta} מיליארד`,
-      context: `העברה מביטחון לשירותים חברתיים. שאלת מיליארד: האם ישראל יכולה להרשות לעצמה?`,
-    };
+  /* ── משפט 2: בריאות + חינוך ── */
+  if (hlthEduDelta >= 12) {
+    parts.push(`בריאות וחינוך קיבלו ${hlthEduDelta} מיליארד נוספים (${hlthEduPct}% מהתמ"ג) — מתקרב לממוצע OECD של 10.5%.`);
+  } else if (hlthEduDelta <= -6) {
+    parts.push(`בריאות וחינוך קוצצו ב-${Math.abs(hlthEduDelta)} מיליארד — ישראל מתרחקת עוד מממוצע OECD של 10.5% מהתמ"ג.`);
+  } else if (hlthEduDelta >= 5) {
+    parts.push(`בריאות וחינוך עלו ב-${hlthEduDelta} מיליארד ל-${hlthEduPct}% מהתמ"ג — צעד נכון, הפער מ-OECD (10.5%) נשאר.`);
   } else {
-    ins2 = {
-      emoji: "📚", label: "בריאות + חינוך",
-      value: `${hlthEduPct}% מהתמ"ג`,
-      context: hlthEduDelta >= 12
-        ? `+${hlthEduDelta} מיליארד — מתקרב לממוצע OECD (10.5%). זו ההשקעה שמשנה דור.`
-        : hlthEduDelta <= -8
-        ? `${hlthEduDelta} מיליארד — ישראל מתרחקת עוד מממוצע OECD (10.5%). מחיר ארוך טווח.`
-        : hlthEduDelta >= 5
-        ? `+${hlthEduDelta} מיליארד — צעד בכיוון הנכון. הפער מ-OECD קטן, אבל נשאר.`
-        : hlthEduDelta <= -3
-        ? `${hlthEduDelta} מיליארד — ישראל כבר 3% מתחת לממוצע OECD. הקיצוץ מרחיק.`
-        : `${hlthEduPct}% לעומת ממוצע OECD 10.5% — פער שנשאר ללא מענה.`,
-    };
+    parts.push(`בריאות וחינוך נשארו ב-${hlthEduPct}% מהתמ"ג — 3% מתחת לממוצע OECD, ללא שינוי.`);
   }
 
-  /* ── ROW 3: Fiscal Verdict ── */
-  let ins3;
+  /* ── משפט 3: פסיקה פיסקלית ── */
   if (deficit < 2.5) {
-    ins3 = {
-      emoji: "💰", label: "שמרנות פיסקלית",
-      value: `${deficit}% גירעון`,
-      context: `איזון כמעט מלא — לא נראה בישראל מ-2000. שוקי האג"ח יתגמלו, אבל הקיצוצים שמימנו זאת גבו מחיר.`,
-    };
+    parts.push(`הגירעון ${deficit}% — איזון כמעט מלא, לא נראה בישראל מ-2000; שוקי האג"ח ישמחו.`);
   } else if (deficit < BOI_TARGET) {
-    ins3 = {
-      emoji: "✅", label: "מתחת ליעד בנק ישראל",
-      value: `${deficit}% גירעון`,
-      context: `${deficit}% — מתחת ל-3.5% שבנק ישראל לא הצליח לבנות ממשלה לפיו מ-2008. דירוג האשראי בכיוון.`,
-    };
+    parts.push(`הגירעון ${deficit}% — מתחת ליעד בנק ישראל (3.5%), שלא הושג ב-15 שנה; דירוג האשראי בכיוון.`);
   } else if (deficit < GOV_DEFICIT) {
-    ins3 = {
-      emoji: "📉", label: "טוב מהממשלה, לא מספיק",
-      value: `${deficit}% גירעון`,
-      context: `נמוך ב-${(GOV_DEFICIT - deficit).toFixed(1)}% מהממשלה — אבל מעל יעד BOI. כל אחוז גירעון = ~${Math.round(GDP * 0.01)} מיליארד ₪ חוב חדש.`,
-    };
+    parts.push(`הגירעון ${deficit}% — נמוך ב-${(GOV_DEFICIT - deficit).toFixed(1)}% מהממשלה הנוכחית, אבל מעל יעד בנק ישראל (3.5%).`);
   } else if (deficit < 6.5) {
-    ins3 = {
-      emoji: "⚠️", label: "מעל הממשלה",
-      value: `${deficit}% גירעון`,
-      context: `${(deficit - GOV_DEFICIT).toFixed(1)}% מעל הממשלה — שגם היא בבעיה. הריבית על החוב כבר 65 מיליארד ₪ לשנה; גדלה.`,
-    };
+    parts.push(`הגירעון ${deficit}% — ${(deficit - GOV_DEFICIT).toFixed(1)}% מעל ממשלה שגם היא בבעיה; הריבית על החוב כבר 65 מיליארד ₪ לשנה.`);
   } else {
-    ins3 = {
-      emoji: "🚨", label: "גירעון מסוכן",
-      value: `${deficit}% גירעון`,
-      context: `${deficit}% — בטריטוריה שמושכת עדכון דירוג. S&P ו-Moody's שמים לב. כל 1% גירעון = ~24 מיליארד ₪ חוב.`,
-    };
+    parts.push(`הגירעון ${deficit}% — בטריטוריה מסוכנת; S&P ו-Moody's שמים לב, וכל 1% = ~24 מיליארד ₪ חוב חדש.`);
   }
 
-  return [ins1, ins2, ins3];
+  return parts.join(" ");
 }
 
 /* ═══════════════════════════════════
@@ -183,7 +116,7 @@ export default function ResultCard({ values, name, onRestart }) {
     shortLabel: SHORT[c.id] || c.label.split(" ")[0],
   }));
 
-  const analysis = buildAnalysis(withDelta, deficit);
+  const analysisParagraph = buildAnalysis(withDelta, deficit);
 
   const vsGov = (deficit - GOV_DEFICIT).toFixed(1);
   const vsBOI = (deficit - BOI_TARGET).toFixed(1);
@@ -353,22 +286,14 @@ export default function ResultCard({ values, name, onRestart }) {
           {/* ── SMART ANALYSIS ── */}
           <div style={S.analysis}>
             <div style={S.sectionLabel}>ניתוח</div>
-            {analysis.map((ins, i) => (
-              <motion.div
-                key={i}
-                style={S.insightRow}
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 + i * 0.08, duration: 0.4 }}
-              >
-                <div style={S.insightTop}>
-                  <span style={S.insightEmoji}>{ins.emoji}</span>
-                  <span style={S.insightLabel}>{ins.label}</span>
-                  <span style={S.insightValue}>{ins.value}</span>
-                </div>
-                <div style={S.insightContext}>{ins.context}</div>
-              </motion.div>
-            ))}
+            <motion.p
+              style={S.analysisParagraph}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+            >
+              {analysisParagraph}
+            </motion.p>
           </div>
 
           {/* ── CARD FOOTER ── */}
@@ -551,32 +476,18 @@ const S = {
   aDeltaNc:{ fontSize: 9, color: "#1E293B", fontWeight: 600 },
 
   /* SMART ANALYSIS */
-  analysis: { padding: "14px 22px 10px" },
+  analysis: { padding: "14px 22px 16px", borderTop: "1px solid rgba(255,255,255,0.04)" },
   sectionLabel: {
     fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
-    textTransform: "uppercase", color: "rgba(99,102,241,0.75)", marginBottom: 12,
+    textTransform: "uppercase", color: "rgba(99,102,241,0.75)", marginBottom: 10,
   },
-  insightRow: {
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottom: "1px solid rgba(255,255,255,0.04)",
-  },
-  insightTop: {
-    display: "flex", alignItems: "center", gap: 7, marginBottom: 4,
-  },
-  insightEmoji: { fontSize: 14, lineHeight: 1, flexShrink: 0 },
-  insightLabel: {
-    fontSize: 12, fontWeight: 700, color: "#CBD5E1",
-    flex: 1,
-  },
-  insightValue: {
-    fontSize: 12, fontWeight: 800, color: "#F1F5F9",
-    direction: "ltr", display: "inline-block",
-  },
-  insightContext: {
-    fontSize: 11, color: "rgba(255,255,255,0.38)",
-    fontWeight: 500, lineHeight: 1.5,
-    paddingRight: 21, // indent under emoji
+  analysisParagraph: {
+    margin: 0,
+    fontSize: 12.5,
+    lineHeight: 1.8,
+    color: "rgba(255,255,255,0.55)",
+    fontWeight: 500,
+    textAlign: "right",
   },
 
   /* CARD FOOTER */
