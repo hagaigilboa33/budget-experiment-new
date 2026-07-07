@@ -20,7 +20,7 @@ export const CATEGORIES = [
         { threshold: -50, severity: "critical", text: "חצי תקציב הביטחון. הזכרנו לך שאנחנו במזרח התיכון?" },
       ],
       increase: [
-        { threshold: 10,  severity: "normal",   text: "10 מיליארד נוספים. הקבלן הביטחוני מאוד שמח." },
+        { threshold: 10,  severity: "normal",   text: "10 מיליארד שקל נוספים. בתעשיות הביטחוניות חוגגים." },
         { threshold: 30,  severity: "warning",  text: "30 מיליארד. ישראל תהיה ה-5 בעולם בהוצאה ביטחונית ביחס לתמ\"ג. בבואה." },
         { threshold: 50,  severity: "warning",  text: "50 מיליארד תוספת. הצבא? עשיר. בתי ספר? לא כל כך." },
       ],
