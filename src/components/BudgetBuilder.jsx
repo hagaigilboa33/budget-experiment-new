@@ -368,8 +368,12 @@ function CategoryCard({ cat, value, onChange }) {
 function BigSlider({ cat, value, onChange }) {
   const pct    = ((value - cat.min) / (cat.max - cat.min)) * 100;
   const govPct = ((cat.current - cat.min) / (cat.max - cat.min)) * 100;
-  const trackRef = useRef(null);
-  const dragging = useRef(false);
+  const trackRef  = useRef(null);
+  const dragging  = useRef(false);
+  const cleanupFn = useRef(null); // called on unmount to remove stale window listeners
+
+  // Remove any lingering listeners when this slider unmounts (e.g. mid-drag navigation on mobile)
+  useEffect(() => () => { if (cleanupFn.current) cleanupFn.current(); }, []);
 
   const getVal = clientX => {
     const r = trackRef.current.getBoundingClientRect();
@@ -385,6 +389,12 @@ function BigSlider({ cat, value, onChange }) {
       dragging.current = false;
       window.removeEventListener("mousemove", mm);
       window.removeEventListener("mouseup", mu);
+      cleanupFn.current = null;
+    };
+    cleanupFn.current = () => {
+      dragging.current = false;
+      window.removeEventListener("mousemove", mm);
+      window.removeEventListener("mouseup", mu);
     };
     window.addEventListener("mousemove", mm);
     window.addEventListener("mouseup", mu);
@@ -395,6 +405,12 @@ function BigSlider({ cat, value, onChange }) {
     onChange(getVal(e.touches[0].clientX), cat.id);
     const tm = e => { if (dragging.current) onChange(getVal(e.touches[0].clientX), cat.id); };
     const tu = () => {
+      dragging.current = false;
+      window.removeEventListener("touchmove", tm);
+      window.removeEventListener("touchend", tu);
+      cleanupFn.current = null;
+    };
+    cleanupFn.current = () => {
       dragging.current = false;
       window.removeEventListener("touchmove", tm);
       window.removeEventListener("touchend", tu);

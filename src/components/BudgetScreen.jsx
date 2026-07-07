@@ -146,7 +146,7 @@ export default function BudgetScreen({ onBudgetSet }) {
             {budget}
           </motion.div>
           <div style={S.bigNumSub}>מיליארד ₪</div>
-          <div style={S.bigNumNote}>* צפי הכנסות המדינה ב-2027</div>
+          {budget === REVENUE && <div style={S.bigNumNote}>* צפי הכנסות המדינה ב-2027</div>}
 
           {/* Cynical comment */}
           <div style={S.commentSlot}>
