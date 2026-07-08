@@ -55,7 +55,7 @@ export default function BudgetBuilder({ values, setValues, onFinish, onTimeout, 
     const ins = getInsight(cat, delta);
     if (ins) {
       clearTimeout(timer.current);
-      setInsight({ text: ins.text, emoji: cat.emoji, color: cat.color, severity: ins.severity, id: Date.now() });
+      setInsight({ text: ins.text, emoji: cat.emoji, color: cat.color, severity: ins.severity, id: Date.now(), catId: cat.id });
       timer.current = setTimeout(() => setInsight(null), 5500);
       if (delta < 0) {
         if (ins.severity === "critical") triggerFlash("critical");
@@ -121,10 +121,10 @@ export default function BudgetBuilder({ values, setValues, onFinish, onTimeout, 
         )}
       </AnimatePresence>
 
-      {/* Toast portal — top center */}
+      {/* Toast portal — only show if insight belongs to current category */}
       <div style={css.toastPortal}>
         <AnimatePresence mode="wait">
-          {insight && <InsightToast key={insight.id} insight={insight} />}
+          {insight && insight.catId === cat.id && <InsightToast key={insight.id} insight={insight} />}
         </AnimatePresence>
       </div>
 
