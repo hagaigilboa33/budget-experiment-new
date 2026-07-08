@@ -66,21 +66,27 @@ export default function BudgetBuilder({ values, setValues, onFinish, onTimeout, 
 
   const handleNext = () => {
     if (!isLast) {
+      const nextIdx = currentIdx + 1;
+      // Update ref SYNCHRONOUSLY before any pending touch events can fire
+      currentCatIdRef.current = CATEGORIES[nextIdx].id;
       setInsight(null);
       clearTimeout(timer.current);
-      setCurrentIdx(i => i + 1);
+      setCurrentIdx(nextIdx);
     } else { onFinish(); }
   };
 
   const handleBack = () => {
     if (currentIdx > 0) {
+      const prevIdx = currentIdx - 1;
+      // Update ref SYNCHRONOUSLY before any pending touch events can fire
+      currentCatIdRef.current = CATEGORIES[prevIdx].id;
       setInsight(null);
       clearTimeout(timer.current);
-      setCurrentIdx(i => i - 1);
+      setCurrentIdx(prevIdx);
     }
   };
 
-  // Keep catId ref in sync for the stale-closure guard in handleChange
+  // Safety net: keep ref in sync if currentIdx ever changes from another source
   useEffect(() => {
     currentCatIdRef.current = CATEGORIES[currentIdx].id;
   }, [currentIdx]);
