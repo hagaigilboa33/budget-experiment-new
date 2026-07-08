@@ -187,7 +187,7 @@ export default function BudgetScreen({ onBudgetSet }) {
             zIndex: 4,
           }}>
             <div style={S.notchBadge}>
-              <span style={S.notchBadgeTop}>הכנסות</span>
+              <span style={S.notchBadgeTop}>צפי הכנסות ל-2027</span>
               <div style={{ display: "flex", alignItems: "baseline", gap: 4, direction: "rtl" }}>
                 <span style={S.notchBadgeNum}>{REVENUE}</span>
                 <span style={S.notchBadgeLabel}>מיליארד שקל</span>
@@ -464,8 +464,8 @@ const S = {
     gap: 2,
   },
   notchBadgeTop: {
-    fontSize: 9, fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.1em", color: "rgba(16,185,129,0.65)",
+    fontSize: 8, fontWeight: 700,
+    letterSpacing: "0.04em", color: "rgba(16,185,129,0.65)",
   },
   notchBadgeNum: {
     fontSize: 13, fontWeight: 800, color: "rgba(16,185,129,0.95)",
