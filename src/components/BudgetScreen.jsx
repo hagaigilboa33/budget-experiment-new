@@ -464,16 +464,16 @@ const S = {
     gap: 2,
   },
   notchBadgeTop: {
-    fontSize: 8, fontWeight: 700,
-    letterSpacing: "0.04em", color: "rgba(16,185,129,0.65)",
+    fontSize: 12, fontWeight: 700,
+    letterSpacing: "0.02em", color: "rgba(16,185,129,0.85)",
   },
   notchBadgeNum: {
-    fontSize: 13, fontWeight: 800, color: "rgba(16,185,129,0.95)",
-    letterSpacing: "-0.01em",
+    fontSize: 22, fontWeight: 900, color: "rgba(16,185,129,1)",
+    letterSpacing: "-0.02em",
   },
   notchBadgeLabel: {
-    fontSize: 10, fontWeight: 600, color: "rgba(16,185,129,0.75)",
-    letterSpacing: "0.02em",
+    fontSize: 14, fontWeight: 600, color: "rgba(16,185,129,0.9)",
+    letterSpacing: "0.01em",
   },
   notchConnector: {
     width: 1, height: 12,
