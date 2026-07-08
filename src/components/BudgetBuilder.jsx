@@ -121,9 +121,9 @@ export default function BudgetBuilder({ values, setValues, onFinish, onTimeout, 
         )}
       </AnimatePresence>
 
-      {/* Toast portal — only show if insight belongs to current category */}
+      {/* Toast portal — keyed by category so old toasts are destroyed on navigation */}
       <div style={css.toastPortal}>
-        <AnimatePresence mode="wait">
+        <AnimatePresence key={`toast-${currentIdx}`} mode="wait">
           {insight && insight.catId === cat.id && <InsightToast key={insight.id} insight={insight} />}
         </AnimatePresence>
       </div>
