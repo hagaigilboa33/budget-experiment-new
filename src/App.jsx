@@ -55,13 +55,20 @@ export default function App() {
         />
       )}
       {screen === "result" && (
-        <ResultCard values={values} name={name} onRestart={handleRestart} />
+        <ResultCard
+          values={values}
+          name={name}
+          onRestart={handleRestart}
+          totalBudget={totalBudget}
+          financingMethod={financingMethod}
+        />
       )}
       {screen === "fired" && (
         <FiredScreen
           name={name}
           onResult={() => setScreen("result")}
           onRestart={handleRestart}
+          onBudget={() => setScreen("budget")}
         />
       )}
     </div>

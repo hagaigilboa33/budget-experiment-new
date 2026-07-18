@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CATEGORIES, getInsight, calcDeficit } from "../data/budgetData";
+import { CATEGORIES, getInsight } from "../data/budgetData";
 
-const GAME_SECONDS = 120;
+const GAME_SECONDS   = 120;
+const OTHER_SPENDING  = 120;
+const HEADER_H        = 72;
+const TOAST_DURATION  = 3800; // ms — appear, read, disappear
 
 /* ─────────────────────────────────────
    COUNTDOWN HOOK
@@ -25,81 +28,57 @@ function useCountdown(total, onTimeout) {
 /* ─────────────────────────────────────
    MAIN
 ───────────────────────────────────── */
-export default function BudgetBuilder({ values, setValues, onFinish, onTimeout, name }) {
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [insight,    setInsight]    = useState(null);
-  const [flash,      setFlash]      = useState(null);
-  const timer          = useRef(null);
-  const flashTimer     = useRef(null);
-  const currentCatIdRef = useRef(CATEGORIES[0].id);
+export default function BudgetBuilder({ values, setValues, onFinish, onTimeout, name, totalBudget }) {
+  const [insight, setInsight] = useState(null);
+  const [flash,   setFlash]   = useState(null);
+  const insightTimer  = useRef(null);
+  const flashTimer    = useRef(null);
+  const activeInsight = useRef(null); // "text|catId" — prevents timer reset on same insight
 
-  const timeLeft  = useCountdown(GAME_SECONDS, onTimeout);
-  const isUrgent  = timeLeft <= 10;
-  const deficit   = parseFloat(calcDeficit(values));
-  const govDeficit = 4.9;
-  const cat       = CATEGORIES[currentIdx];
-  const isLast    = currentIdx === CATEGORIES.length - 1;
+  const timeLeft = useCountdown(GAME_SECONDS, onTimeout);
+  const isUrgent = timeLeft <= 10;
 
-  const triggerFlash = (level) => {
+  const currentSpend = Object.values(values).reduce((a, b) => a + b, 0);
+  const available    = (totalBudget ?? 613) - OTHER_SPENDING;
+  const remaining    = Math.round((available - currentSpend) * 10) / 10;
+
+  useEffect(() => () => {
+    clearTimeout(insightTimer.current);
+    clearTimeout(flashTimer.current);
+  }, []);
+
+  const triggerFlash = useCallback((level) => {
     clearTimeout(flashTimer.current);
     setFlash(level);
     flashTimer.current = setTimeout(() => setFlash(null), 900);
-  };
+  }, []);
 
   const handleChange = useCallback((raw, catId) => {
-    if (catId !== currentCatIdRef.current) return; // stale slider call — ignore
-    const cat   = CATEGORIES.find(c => c.id === catId);
-    const val   = Math.round(Math.max(cat.min, Math.min(cat.max, raw)));
-    const delta = val - cat.current;
+    const cat     = CATEGORIES.find(c => c.id === catId);
+    const clipped = Math.max(cat.min, Math.min(cat.max, raw));
+    const step    = (cat.min % 1 !== 0 || cat.max % 1 !== 0) ? 0.5 : 1;
+    const val     = Math.round(clipped / step) * step;
+    const delta   = val - cat.current;
     setValues(prev => ({ ...prev, [cat.id]: val }));
     const ins = getInsight(cat, delta);
     if (ins) {
-      // Always reset the dismiss timer so insight stays while user is dragging
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => setInsight(null), 5500);
-      // Only update state (and trigger animation) when the text actually changes
-      setInsight(prev => {
-        if (prev && prev.text === ins.text && prev.catId === cat.id) return prev;
-        return { text: ins.text, emoji: cat.emoji, color: cat.color, severity: ins.severity, id: Date.now(), catId: cat.id };
-      });
+      const key = ins.text + "|" + cat.id;
+      if (key !== activeInsight.current) {
+        // New insight — start fresh timer, don't reset if same insight is still showing
+        activeInsight.current = key;
+        clearTimeout(insightTimer.current);
+        insightTimer.current = setTimeout(() => {
+          setInsight(null);
+          activeInsight.current = null;
+        }, TOAST_DURATION);
+        setInsight({ text: ins.text, emoji: cat.emoji, color: cat.color, severity: ins.severity, id: Date.now(), catId: cat.id });
+      }
       if (delta < 0) {
         if (ins.severity === "critical") triggerFlash("critical");
         else if (ins.severity === "warning") triggerFlash("warning");
       }
     }
-  }, [setValues]);
-
-  const handleNext = () => {
-    if (!isLast) {
-      const nextIdx = currentIdx + 1;
-      // Update ref SYNCHRONOUSLY before any pending touch events can fire
-      currentCatIdRef.current = CATEGORIES[nextIdx].id;
-      setInsight(null);
-      clearTimeout(timer.current);
-      setCurrentIdx(nextIdx);
-    } else { onFinish(); }
-  };
-
-  const handleBack = () => {
-    if (currentIdx > 0) {
-      const prevIdx = currentIdx - 1;
-      // Update ref SYNCHRONOUSLY before any pending touch events can fire
-      currentCatIdRef.current = CATEGORIES[prevIdx].id;
-      setInsight(null);
-      clearTimeout(timer.current);
-      setCurrentIdx(prevIdx);
-    }
-  };
-
-  // Safety net: keep ref in sync if currentIdx ever changes from another source
-  useEffect(() => {
-    currentCatIdRef.current = CATEGORIES[currentIdx].id;
-  }, [currentIdx]);
-
-  useEffect(() => () => {
-    clearTimeout(timer.current);
-    clearTimeout(flashTimer.current);
-  }, []);
+  }, [setValues, triggerFlash]);
 
   const flashColor = flash === "critical"
     ? "rgba(239,68,68,0.28)"
@@ -108,7 +87,7 @@ export default function BudgetBuilder({ values, setValues, onFinish, onTimeout, 
     : null;
 
   return (
-    <div style={{ ...css.page, background: isUrgent ? "rgba(10,0,0,1)" : "#070B14" }}>
+    <div style={{ background: isUrgent ? "rgba(10,0,0,1)" : "#070B14", minHeight: "100vh", transition: "background 0.5s" }}>
       <div className="mesh-bg" />
       <div className="grid-overlay" />
 
@@ -126,264 +105,209 @@ export default function BudgetBuilder({ values, setValues, onFinish, onTimeout, 
         )}
       </AnimatePresence>
 
-      {/* Toast portal — keyed by category so old toasts are destroyed on navigation */}
+      {/* Insight toast — below sticky header */}
       <div style={css.toastPortal}>
-        <AnimatePresence key={`toast-${currentIdx}`} mode="wait">
-          {insight && insight.catId === cat.id && <InsightToast key={insight.id} insight={insight} />}
+        <AnimatePresence mode="wait">
+          {insight && <InsightToast key={insight.id} insight={insight} />}
         </AnimatePresence>
       </div>
 
-      <div style={css.shell}>
+      {/* Sticky header */}
+      <StickyHeader
+        timeLeft={timeLeft}
+        isUrgent={isUrgent}
+        name={name}
+        remaining={remaining}
+        onFinish={onFinish}
+      />
 
-        {/* Nav */}
-        <motion.header
-          style={css.nav}
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div style={css.navBrand}>
-            <span style={css.navLogo}>כלכליסט</span>
-            <span style={css.navDot} />
-            <span style={css.navSub}>בחירות 2026</span>
+      {/* Scrollable content */}
+      <div style={css.scrollArea}>
+        <div style={css.shell}>
+
+          {/* Section heading */}
+          <div style={css.sectionHead}>
+            <span style={css.sectionTitle}>חלוקת תקציב 2027</span>
+            <span style={css.sectionCount}>{CATEGORIES.length} סעיפים</span>
           </div>
-          <LiveBadge deficit={deficit} />
-        </motion.header>
 
-        {/* ── BIG TIMER ── */}
-        <BigTimer timeLeft={timeLeft} total={GAME_SECONDS} urgent={isUrgent} name={name} />
-
-        {/* Progress dots */}
-        <div style={css.progressRow}>
-          <span style={css.progressLabel}>סעיף {currentIdx + 1} מתוך {CATEGORIES.length}</span>
-          <div style={css.dots}>
-            {CATEGORIES.map((_, i) => (
-              <motion.div
-                key={i}
-                style={{
-                  ...css.dot,
-                  background: i < currentIdx ? "#6366F1"
-                            : i === currentIdx ? "#fff"
-                            : "rgba(255,255,255,0.15)",
-                }}
-                animate={{ width: i === currentIdx ? 22 : 8 }}
-                transition={{ type: "spring", stiffness: 320, damping: 28 }}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Category card */}
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={currentIdx}
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{   opacity: 0, x: -50 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <CategoryCard
-              cat={cat}
-              value={values[cat.id]}
-              onChange={handleChange}
-            />
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Back / Next buttons */}
-        <div style={css.btnRow}>
-          {currentIdx > 0 && (
-            <motion.button
-              style={css.backBtn}
-              whileHover={{ scale: 1.015 }}
-              whileTap={{ scale: 0.985 }}
-              onClick={handleBack}
-              initial={{ opacity: 0, y: 16 }}
+          {/* Category rows */}
+          {CATEGORIES.map((cat, idx) => (
+            <motion.div
+              key={cat.id}
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.4 }}
+              transition={{ delay: idx * 0.022, duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
             >
-              ← חזרה
-            </motion.button>
-          )}
+              <CategoryRow
+                cat={cat}
+                value={values[cat.id]}
+                onChange={handleChange}
+              />
+            </motion.div>
+          ))}
+
+          {/* Bottom finish button */}
           <motion.button
-            style={{
-              ...css.nextBtn,
-              flex: 1,
-              background: isLast
-                ? "linear-gradient(135deg, #10B981, #059669)"
-                : "linear-gradient(135deg, #6366F1, #8B5CF6)",
-              boxShadow: isLast
-                ? "0 4px 24px rgba(16,185,129,0.4)"
-                : "0 4px 24px rgba(99,102,241,0.4)",
-            }}
-            whileHover={{ scale: 1.015, boxShadow: "0 12px 40px rgba(99,102,241,0.5)" }}
+            style={css.finishBtn}
+            whileHover={{ scale: 1.015, boxShadow: "0 14px 44px rgba(16,185,129,0.5)" }}
             whileTap={{ scale: 0.985 }}
-            onClick={handleNext}
-            initial={{ opacity: 0, y: 16 }}
+            onClick={onFinish}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.4 }}
+            transition={{ delay: 0.55, duration: 0.4 }}
           >
-            {isLast ? "סיים — ראה את הכרטיס שלי ✓" : "הבא →"}
+            ✓ סיים — ראה את הכרטיס שלי
           </motion.button>
+
         </div>
-
-        {/* Deficit compare */}
-        <DeficitBar deficit={deficit} govDeficit={govDeficit} />
-
       </div>
     </div>
   );
 }
 
 /* ─────────────────────────────────────
-   BIG TIMER
+   STICKY HEADER
 ───────────────────────────────────── */
-function BigTimer({ timeLeft, total, urgent, name }) {
-  const pct   = (timeLeft / total) * 100;
-  const color = urgent ? "#EF4444" : timeLeft < 20 ? "#F59E0B" : "#6366F1";
-  const mm    = String(Math.floor(timeLeft / 60)).padStart(1, "0");
-  const ss    = String(timeLeft % 60).padStart(2, "0");
+function StickyHeader({ timeLeft, isUrgent, name, remaining, onFinish }) {
+  const mm = String(Math.floor(timeLeft / 60)).padStart(1, "0");
+  const ss = String(timeLeft % 60).padStart(2, "0");
+  const timerColor  = isUrgent ? "#EF4444" : timeLeft <= 30 ? "#F59E0B" : "rgba(255,255,255,0.9)";
+  const isOver      = remaining < 0;
+  const remainColor = isOver ? "#EF4444" : remaining === 0 ? "#10B981" : "#34D399";
 
   return (
-    <motion.div
-      style={css.timerBlock}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1, duration: 0.5 }}
-    >
-      <div style={css.timerTopRow}>
-        <span style={css.timerSubLabel}>
-          {urgent ? `⚠ ${name}, הזמן נגמר!` : "זמן שלטון נותר"}
-        </span>
-        <motion.span
-          style={{ ...css.timerNum, color }}
-          animate={urgent ? { scale: [1, 1.07, 1] } : { scale: 1 }}
-          transition={urgent ? { duration: 0.55, repeat: Infinity } : {}}
-        >
-          {mm}:{ss}
-        </motion.span>
-      </div>
-      <div style={css.timerTrackWrap}>
-        <motion.div
-          style={{
-            height: "100%",
-            borderRadius: 100,
-            background: `linear-gradient(90deg, ${color}99, ${color})`,
-            boxShadow: urgent ? `0 0 18px ${color}88` : "none",
-          }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.95, ease: "linear" }}
-        />
-      </div>
-    </motion.div>
-  );
-}
+    <div style={css.header}>
+      <div style={css.headerInner}>
 
-/* ─────────────────────────────────────
-   LIVE BADGE
-───────────────────────────────────── */
-function LiveBadge({ deficit }) {
-  const color = deficit < 3.5 ? "#10B981" : deficit < 5.5 ? "#F59E0B" : "#EF4444";
-  return (
-    <motion.div
-      style={{ ...css.liveBadge, borderColor: color + "50", background: color + "14" }}
-      key={Math.round(deficit * 10)}
-      initial={{ scale: 1.08 }}
-      animate={{ scale: 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 22 }}
-    >
-      <span style={{ ...css.liveDot, background: color, boxShadow: `0 0 6px ${color}` }} />
-      <span style={{ ...css.liveNum, color }}>גירעון {deficit}%</span>
-    </motion.div>
-  );
-}
-
-/* ─────────────────────────────────────
-   CATEGORY CARD
-───────────────────────────────────── */
-function CategoryCard({ cat, value, onChange }) {
-  const delta     = Math.round(value - cat.current);
-  const isChanged = Math.abs(delta) >= 1;
-  const isUp      = delta > 0;
-  const defColor  = cat.color;
-
-  return (
-    <div style={{ ...css.catCard, borderColor: defColor + "30" }}>
-      {/* Header */}
-      <div style={css.catHeader}>
-        <div style={css.catHeaderLeft}>
-          <div style={{ ...css.catEmojiWrap, background: defColor + "18", border: `1.5px solid ${defColor}30` }}>
-            <span style={css.catEmoji}>{cat.emoji}</span>
-          </div>
-          <div>
-            <div style={css.catName}>{cat.label}</div>
-            <div style={css.catGovLine}>
-              ממשלה: <span dir="ltr" style={{ color: "#64748B", fontWeight: 600 }}>{cat.current} מיליארד</span>
-            </div>
-          </div>
+        {/* Timer (RTL-start = right side) */}
+        <div style={css.timerBlock}>
+          <span style={css.timerLabel}>
+            {isUrgent ? `⚠ ${name}!` : "זמן נותר"}
+          </span>
+          <motion.span
+            style={{ ...css.timerNum, color: timerColor }}
+            animate={isUrgent ? { scale: [1, 1.07, 1] } : { scale: 1 }}
+            transition={isUrgent ? { duration: 0.55, repeat: Infinity } : {}}
+          >
+            {mm}:{ss}
+          </motion.span>
         </div>
-        <div style={css.catValueBox}>
+
+        <div style={css.headerDivider} />
+
+        {/* Remaining budget (center, expands) */}
+        <div style={css.remainBlock}>
+          <span style={{ ...css.remainLabel, color: isOver ? "#FCA5A5" : "rgba(255,255,255,0.38)" }}>
+            {isOver ? "חריגה מהתקציב" : "נותר לחלוקה"}
+          </span>
           <motion.div
-            key={value}
-            style={{
-              ...css.catValueNum,
-              color: !isChanged ? "var(--text-2)" : isUp ? "#34D399" : "#F87171",
-              display: "flex", alignItems: "baseline", direction: "ltr", gap: 6,
-            }}
-            initial={{ scale: 1.15 }}
+            key={Math.round(remaining)}
+            style={css.remainNumRow}
+            initial={{ scale: 1.1 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 400, damping: 22 }}
           >
-            <span>{value}</span>
-            <span style={{ fontSize: "0.5em", fontWeight: 600 }}>מיליארד</span>
+            <span style={{ ...css.remainNum, color: remainColor }} dir="ltr">
+              {isOver ? "" : "+"}{Math.round(remaining)}
+            </span>
+            <span style={css.remainUnit}>מיליארד</span>
           </motion.div>
-          <AnimatePresence>
-            {isChanged && (
-              <motion.div
-                style={{
-                  ...css.catDelta,
-                  color:      isUp ? "#34D399" : "#F87171",
-                  background: isUp ? "rgba(52,211,153,0.1)" : "rgba(248,113,113,0.1)",
-                  border:     `1px solid ${isUp ? "rgba(52,211,153,0.25)" : "rgba(248,113,113,0.25)"}`,
-                }}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <span style={{ display: "flex", alignItems: "baseline", direction: "ltr", gap: 3 }}>
-                  <span>{isUp ? "+" : ""}{delta}</span>
-                  <span style={{ fontSize: "0.85em" }}>מיליארד</span>
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
-      </div>
 
-      {/* Slider */}
-      <BigSlider cat={cat} value={value} onChange={onChange} />
+        <div style={css.headerDivider} />
 
-      {/* Range labels */}
-      <div style={{ display: "flex", justifyContent: "space-between", direction: "ltr", marginTop: 10 }}>
-        <span dir="ltr" style={css.rangeLabel}>{cat.min} מיליארד</span>
-        <span dir="ltr" style={{ ...css.rangeLabel, color: "#334155" }}>▲ {cat.current} מיליארד</span>
-        <span dir="ltr" style={css.rangeLabel}>{cat.max} מיליארד</span>
+        {/* Finish button */}
+        <motion.button
+          style={css.headerBtn}
+          whileHover={{ scale: 1.05, boxShadow: "0 6px 22px rgba(16,185,129,0.4)" }}
+          whileTap={{ scale: 0.94 }}
+          onClick={onFinish}
+        >
+          סיים ✓
+        </motion.button>
+
       </div>
     </div>
   );
 }
 
 /* ─────────────────────────────────────
-   BIG SLIDER
+   CATEGORY ROW
 ───────────────────────────────────── */
-function BigSlider({ cat, value, onChange }) {
-  const pct    = ((value - cat.min) / (cat.max - cat.min)) * 100;
+function CategoryRow({ cat, value, onChange }) {
+  const delta     = parseFloat((value - cat.current).toFixed(1));
+  const isChanged = Math.abs(delta) >= 0.1;
+  const isUp      = delta > 0;
+  const valColor  = isChanged ? (isUp ? "#34D399" : "#F87171") : "rgba(255,255,255,0.85)";
+
+  return (
+    <div style={{ ...css.row, borderColor: cat.color + "22" }}>
+      {/* Colored left-accent stripe */}
+      <div style={{ ...css.rowStripe, background: `linear-gradient(180deg, ${cat.color}, ${cat.color}88)` }} />
+
+      {/* Content */}
+      <div style={css.rowBody}>
+
+        {/* Name row */}
+        <div style={css.rowNameRow}>
+          <span style={css.rowEmoji}>{cat.emoji}</span>
+          <span style={css.rowName}>{cat.label}</span>
+          {/* Value + delta */}
+          <div style={css.rowValWrap}>
+            {isChanged && (
+              <motion.span
+                style={{
+                  ...css.rowDelta,
+                  color:      isUp ? "#34D399" : "#F87171",
+                  background: isUp ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)",
+                }}
+                initial={{ opacity: 0, scale: 0.75 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                {isUp ? "+" : ""}{delta}
+              </motion.span>
+            )}
+            <motion.span
+              key={value}
+              style={{ ...css.rowVal, color: valColor }}
+              initial={{ scale: 1.14 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 420, damping: 22 }}
+              dir="ltr"
+            >
+              {value}
+            </motion.span>
+            <span style={css.rowUnit}>מיליארד</span>
+          </div>
+        </div>
+
+        {/* Slider */}
+        <CompactSlider cat={cat} value={value} onChange={onChange} />
+
+        {/* Range labels */}
+        <div style={css.rangeRow}>
+          <span style={css.rangeNum} dir="ltr">{cat.min}</span>
+          <span style={css.rangeMid} dir="ltr">▲ {cat.current}</span>
+          <span style={css.rangeNum} dir="ltr">{cat.max}</span>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────
+   COMPACT SLIDER
+───────────────────────────────────── */
+function CompactSlider({ cat, value, onChange }) {
+  const pct    = Math.max(0, ((value - cat.min) / (cat.max - cat.min)) * 100);
   const govPct = ((cat.current - cat.min) / (cat.max - cat.min)) * 100;
   const trackRef  = useRef(null);
   const dragging  = useRef(false);
-  const cleanupFn = useRef(null); // called on unmount to remove stale window listeners
+  const cleanupFn = useRef(null);
 
-  // Remove any lingering listeners when this slider unmounts (e.g. mid-drag navigation on mobile)
   useEffect(() => () => { if (cleanupFn.current) cleanupFn.current(); }, []);
 
   const getVal = clientX => {
@@ -399,16 +323,16 @@ function BigSlider({ cat, value, onChange }) {
     const mu = () => {
       dragging.current = false;
       window.removeEventListener("mousemove", mm);
-      window.removeEventListener("mouseup", mu);
+      window.removeEventListener("mouseup",  mu);
       cleanupFn.current = null;
     };
     cleanupFn.current = () => {
       dragging.current = false;
       window.removeEventListener("mousemove", mm);
-      window.removeEventListener("mouseup", mu);
+      window.removeEventListener("mouseup",  mu);
     };
     window.addEventListener("mousemove", mm);
-    window.addEventListener("mouseup", mu);
+    window.addEventListener("mouseup",   mu);
   };
 
   const onTouchStart = e => {
@@ -418,72 +342,47 @@ function BigSlider({ cat, value, onChange }) {
     const tu = () => {
       dragging.current = false;
       window.removeEventListener("touchmove", tm);
-      window.removeEventListener("touchend", tu);
+      window.removeEventListener("touchend",  tu);
       cleanupFn.current = null;
     };
     cleanupFn.current = () => {
       dragging.current = false;
       window.removeEventListener("touchmove", tm);
-      window.removeEventListener("touchend", tu);
+      window.removeEventListener("touchend",  tu);
     };
     window.addEventListener("touchmove", tm, { passive: true });
-    window.addEventListener("touchend", tu);
+    window.addEventListener("touchend",  tu);
   };
 
   return (
     <div
       ref={trackRef}
-      style={css.bigTrack}
+      style={css.sliderTrack}
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}
     >
       {/* Groove */}
-      <div style={css.bigGroove} />
+      <div style={css.sliderGroove} />
 
       {/* Fill */}
       <motion.div
-        style={{ ...css.bigFill, background: cat.color }}
-        animate={{ width: `${pct}%`, boxShadow: `0 0 12px ${cat.color}66` }}
+        style={{ ...css.sliderFill, background: cat.color }}
+        animate={{ width: `${pct}%`, boxShadow: `0 0 8px ${cat.color}55` }}
         transition={{ type: "spring", stiffness: 260, damping: 28 }}
       />
 
       {/* Gov notch */}
-      <div style={{ ...css.govNotch, left: `${govPct}%` }}>
-        <div style={{ ...css.govPip, background: cat.color + "80" }} />
-      </div>
+      <div style={{ ...css.sliderGovNotch, left: `${govPct}%`, background: cat.color + "70" }} />
 
       {/* Thumb */}
       <motion.div
-        style={{ ...css.bigThumb, boxShadow: `0 0 0 3px ${cat.color}55, 0 4px 16px rgba(0,0,0,0.6)` }}
-        animate={{ left: `calc(${pct}% - 14px)` }}
+        style={{ ...css.sliderThumb, boxShadow: `0 0 0 2.5px ${cat.color}66, 0 2px 12px rgba(0,0,0,0.7)` }}
+        animate={{ left: `calc(${pct}% - 10px)` }}
         transition={{ type: "spring", stiffness: 260, damping: 28 }}
-        whileHover={{ scale: 1.2 }}
-        whileTap={{ scale: 0.92 }}
+        whileHover={{ scale: 1.28 }}
+        whileTap={{ scale: 0.88 }}
       />
     </div>
-  );
-}
-
-/* ─────────────────────────────────────
-   DEFICIT BAR (bottom)
-───────────────────────────────────── */
-function DeficitBar({ deficit, govDeficit }) {
-  const color  = deficit < 3.5 ? "#10B981" : deficit < 5.5 ? "#F59E0B" : "#EF4444";
-  const isGood = deficit < govDeficit;
-  return (
-    <motion.div
-      style={css.defBar}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 0.4 }}
-    >
-      <span style={{ color, fontWeight: 700 }}>גירעון: {deficit}%</span>
-      <span style={css.defBarSep}>·</span>
-      <span style={{ color: "#475569" }}>ממשלה: {govDeficit}%</span>
-      <span style={{ color: isGood ? "#34D399" : "#F87171", fontSize: 11, fontWeight: 600 }}>
-        {isGood ? `▼ ${Math.abs(deficit - govDeficit).toFixed(1)}% מתחת` : `▲ ${Math.abs(deficit - govDeficit).toFixed(1)}% מעל`}
-      </span>
-    </motion.div>
   );
 }
 
@@ -497,11 +396,7 @@ function InsightToast({ insight }) {
 
   return (
     <motion.div
-      style={{
-        ...css.toast,
-        borderColor: borderCol + "60",
-        borderRight: `3px solid ${borderCol}`,
-      }}
+      style={{ ...css.toast, borderColor: borderCol + "60", borderRight: `3px solid ${borderCol}` }}
       initial={{ opacity: 0, y: 24, scale: 0.97 }}
       animate={{ opacity: 1, y: 0,  scale: 1 }}
       exit={{   opacity: 0, y: 12, scale: 0.97, transition: { duration: 0.12 } }}
@@ -521,7 +416,7 @@ function InsightToast({ insight }) {
         style={{ ...css.toastProgress, background: borderCol }}
         initial={{ scaleX: 1 }}
         animate={{ scaleX: 0 }}
-        transition={{ duration: 5.5, ease: "linear" }}
+        transition={{ duration: TOAST_DURATION / 1000, ease: "linear" }}
       />
     </motion.div>
   );
@@ -531,30 +426,227 @@ function InsightToast({ insight }) {
    STYLES
 ───────────────────────────────────── */
 const css = {
-  page: {
-    minHeight: "100vh",
-    position: "relative",
-    overflow: "hidden",
-    padding: "0 0 140px",
-    transition: "background 0.5s",
-  },
+
   flashOverlay: {
-    position: "fixed", inset: 0,
-    zIndex: 200, pointerEvents: "none",
+    position: "fixed", inset: 0, zIndex: 200, pointerEvents: "none",
   },
+
   toastPortal: {
     position: "fixed",
-    top: 16, left: "50%",
+    top: HEADER_H + 10,
+    left: "50%",
     transform: "translateX(-50%)",
     width: "calc(100% - 32px)",
     maxWidth: 660,
     zIndex: 150,
   },
+
+  /* ── Sticky header ── */
+  header: {
+    position: "fixed",
+    top: 0, left: 0, right: 0,
+    height: HEADER_H,
+    zIndex: 100,
+    background: "rgba(6,9,18,0.94)",
+    backdropFilter: "blur(20px)",
+    borderBottom: "1px solid rgba(255,255,255,0.07)",
+    display: "flex",
+    alignItems: "center",
+    padding: "0 16px",
+  },
+  headerInner: {
+    maxWidth: 700,
+    margin: "0 auto",
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+  },
+  headerDivider: {
+    width: 1, height: 38, background: "rgba(255,255,255,0.08)", flexShrink: 0,
+  },
+
+  /* Timer block */
+  timerBlock: {
+    display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0,
+  },
+  timerLabel: {
+    fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.28)",
+    letterSpacing: "0.1em", textTransform: "uppercase",
+  },
+  timerNum: {
+    fontSize: 30, fontWeight: 900, letterSpacing: "-0.04em", lineHeight: 1,
+    fontVariantNumeric: "tabular-nums", transition: "color 0.4s",
+  },
+
+  /* Remaining block */
+  remainBlock: {
+    flex: 1,
+    display: "flex", flexDirection: "column", alignItems: "center",
+  },
+  remainLabel: {
+    fontSize: 9, fontWeight: 700,
+    letterSpacing: "0.08em", textTransform: "uppercase",
+    transition: "color 0.3s",
+  },
+  remainNumRow: {
+    display: "flex", alignItems: "baseline", gap: 4, marginTop: 1,
+  },
+  remainNum: {
+    fontSize: 28, fontWeight: 900, letterSpacing: "-0.03em", lineHeight: 1,
+    transition: "color 0.3s",
+  },
+  remainUnit: {
+    fontSize: 11, color: "rgba(255,255,255,0.3)", fontWeight: 600,
+  },
+
+  /* Header finish btn */
+  headerBtn: {
+    padding: "9px 16px",
+    background: "linear-gradient(135deg, #10B981, #059669)",
+    color: "#fff",
+    fontSize: 13, fontWeight: 700,
+    borderRadius: 11, border: "none",
+    cursor: "pointer",
+    letterSpacing: "-0.01em",
+    boxShadow: "0 3px 14px rgba(16,185,129,0.3)",
+    flexShrink: 0,
+    whiteSpace: "nowrap",
+  },
+
+  /* ── Scroll area ── */
+  scrollArea: {
+    paddingTop: HEADER_H,
+    paddingBottom: 56,
+  },
+  shell: {
+    maxWidth: 700,
+    margin: "0 auto",
+    padding: "20px 14px 0",
+    position: "relative",
+    zIndex: 10,
+  },
+  sectionHead: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontSize: 11, fontWeight: 700,
+    color: "rgba(255,255,255,0.3)",
+    letterSpacing: "0.1em", textTransform: "uppercase",
+  },
+  sectionCount: {
+    fontSize: 11, fontWeight: 500,
+    color: "rgba(255,255,255,0.2)",
+  },
+
+  /* ── Category row ── */
+  row: {
+    display: "flex",
+    background: "rgba(255,255,255,0.025)",
+    border: "1px solid",
+    borderRadius: 14,
+    marginBottom: 7,
+    overflow: "hidden",
+  },
+  rowStripe: {
+    width: 4, flexShrink: 0,
+  },
+  rowBody: {
+    flex: 1,
+    padding: "12px 14px 8px",
+  },
+
+  rowNameRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 9,
+  },
+  rowEmoji: { fontSize: 16, flexShrink: 0, lineHeight: 1 },
+  rowName: {
+    flex: 1,
+    fontSize: 13, fontWeight: 700,
+    color: "rgba(255,255,255,0.82)",
+    lineHeight: 1.3,
+  },
+  rowValWrap: {
+    display: "flex", alignItems: "center", gap: 4,
+    flexShrink: 0, direction: "ltr",
+  },
+  rowVal: {
+    fontSize: 21, fontWeight: 900, letterSpacing: "-0.03em", lineHeight: 1,
+    transition: "color 0.25s",
+  },
+  rowUnit: {
+    fontSize: 9, color: "rgba(255,255,255,0.28)", fontWeight: 500, marginLeft: 1,
+  },
+  rowDelta: {
+    fontSize: 11, fontWeight: 800,
+    padding: "2px 6px", borderRadius: 100,
+    letterSpacing: "0.01em",
+  },
+
+  /* ── Compact slider ── */
+  sliderTrack: {
+    position: "relative",
+    height: 32,
+    display: "flex", alignItems: "center",
+    cursor: "pointer",
+    userSelect: "none",
+    touchAction: "none",
+    direction: "ltr",
+    marginBottom: 4,
+  },
+  sliderGroove: {
+    position: "absolute", left: 0, right: 0,
+    height: 4, borderRadius: 100,
+    background: "rgba(255,255,255,0.07)",
+  },
+  sliderFill: {
+    position: "absolute", top: "50%", left: 0,
+    transform: "translateY(-50%)",
+    height: 4, borderRadius: 100,
+  },
+  sliderGovNotch: {
+    position: "absolute", top: "50%",
+    transform: "translate(-50%, -50%)",
+    width: 2, height: 14, borderRadius: 1,
+  },
+  sliderThumb: {
+    position: "absolute",
+    width: 20, height: 20, borderRadius: "50%",
+    background: "#fff",
+    top: "50%", transform: "translateY(-50%)",
+    zIndex: 5, cursor: "grab",
+  },
+
+  rangeRow: {
+    display: "flex", justifyContent: "space-between",
+    direction: "ltr",
+  },
+  rangeNum: { fontSize: 9, color: "rgba(255,255,255,0.2)", fontWeight: 500 },
+  rangeMid: { fontSize: 9, color: "rgba(255,255,255,0.13)", fontWeight: 500 },
+
+  /* ── Bottom finish button ── */
+  finishBtn: {
+    width: "100%",
+    padding: "18px 32px",
+    color: "#fff",
+    fontSize: 16, fontWeight: 700,
+    borderRadius: 16, border: "none",
+    cursor: "pointer",
+    letterSpacing: "-0.01em",
+    background: "linear-gradient(135deg, #10B981, #059669)",
+    boxShadow: "0 4px 24px rgba(16,185,129,0.35)",
+    marginTop: 14,
+  },
+
+  /* ── Toast ── */
   toast: {
     background: "rgba(8,10,18,0.98)",
     border: "1px solid",
-    borderRadius: 16,
-    overflow: "hidden",
+    borderRadius: 16, overflow: "hidden",
     backdropFilter: "blur(24px)",
     boxShadow: "0 12px 60px rgba(0,0,0,0.7)",
   },
@@ -562,226 +654,8 @@ const css = {
     display: "flex", alignItems: "flex-start",
     gap: 14, padding: "18px 20px",
   },
-  toastText: { fontSize: 16, lineHeight: 1.6, fontWeight: 600 },
+  toastText: { fontSize: 15, lineHeight: 1.6, fontWeight: 600 },
   toastBadge: { fontWeight: 900, fontSize: 13, letterSpacing: "0.03em" },
   toastProgress: { height: 3, transformOrigin: "left center", borderRadius: 0 },
 
-  shell: {
-    maxWidth: 640,
-    margin: "0 auto",
-    padding: "0 20px",
-    position: "relative",
-    zIndex: 10,
-  },
-
-  /* Nav */
-  nav: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "20px 0 22px",
-    borderBottom: "1px solid var(--border)",
-    marginBottom: 28,
-  },
-  navBrand: { display: "flex", alignItems: "center", gap: 8 },
-  navLogo:  { fontSize: 14, fontWeight: 800, color: "var(--text-1)", letterSpacing: "-0.02em" },
-  navDot:   { width: 4, height: 4, borderRadius: "50%", background: "var(--text-3)", flexShrink: 0 },
-  navSub:   { fontSize: 12, color: "var(--text-3)", fontWeight: 500 },
-
-  liveBadge: {
-    display: "flex", alignItems: "center", gap: 7,
-    padding: "6px 12px", borderRadius: 100, border: "1px solid",
-  },
-  liveDot: { width: 6, height: 6, borderRadius: "50%", flexShrink: 0 },
-  liveNum: { fontSize: 12, fontWeight: 700, letterSpacing: "-0.01em" },
-
-  /* Big timer */
-  timerBlock: {
-    marginBottom: 28,
-    padding: "20px 22px",
-    background: "rgba(255,255,255,0.025)",
-    border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: 16,
-  },
-  timerTopRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    marginBottom: 14,
-    direction: "ltr",
-  },
-  timerSubLabel: {
-    fontSize: 12, fontWeight: 600,
-    color: "var(--text-3)", letterSpacing: "0.06em",
-    textTransform: "uppercase",
-    direction: "rtl",
-  },
-  timerNum: {
-    fontSize: "clamp(48px, 10vw, 72px)",
-    fontWeight: 900,
-    letterSpacing: "-0.05em",
-    lineHeight: 1,
-    fontVariantNumeric: "tabular-nums",
-    transition: "color 0.4s",
-  },
-  timerTrackWrap: {
-    height: 8,
-    background: "rgba(255,255,255,0.07)",
-    borderRadius: 100,
-    overflow: "hidden",
-    direction: "ltr",
-  },
-
-  /* Progress */
-  progressRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  progressLabel: {
-    fontSize: 12, fontWeight: 600, color: "var(--text-3)",
-  },
-  dots: {
-    display: "flex", alignItems: "center", gap: 5,
-    direction: "ltr",
-  },
-  dot: {
-    height: 8, borderRadius: 100,
-    transition: "background 0.3s",
-  },
-
-  /* Category card */
-  catCard: {
-    background: "var(--surface)",
-    border: "1px solid",
-    borderRadius: 20,
-    padding: "24px 22px 20px",
-    marginBottom: 16,
-  },
-  catHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 28,
-    gap: 12,
-  },
-  catHeaderLeft: { display: "flex", alignItems: "center", gap: 14 },
-  catEmojiWrap: {
-    width: 52, height: 52,
-    borderRadius: 14,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    flexShrink: 0,
-  },
-  catEmoji: { fontSize: 26, lineHeight: 1 },
-  catName: {
-    fontSize: "clamp(18px, 4vw, 22px)",
-    fontWeight: 800,
-    color: "var(--text-1)",
-    letterSpacing: "-0.02em",
-    lineHeight: 1.15,
-    marginBottom: 4,
-  },
-  catGovLine: {
-    fontSize: 12, color: "var(--text-3)", fontWeight: 400,
-  },
-  catValueBox: {
-    display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5,
-    flexShrink: 0,
-  },
-  catValueNum: {
-    fontSize: "clamp(28px, 6vw, 36px)",
-    fontWeight: 900,
-    letterSpacing: "-0.04em",
-    lineHeight: 1,
-    transition: "color 0.25s",
-  },
-  catDelta: {
-    fontSize: 12, fontWeight: 700,
-    padding: "3px 10px", borderRadius: 100,
-    letterSpacing: "0.01em",
-  },
-
-  /* Big slider */
-  bigTrack: {
-    position: "relative",
-    height: 36,
-    display: "flex", alignItems: "center",
-    cursor: "pointer",
-    userSelect: "none",
-    touchAction: "none",
-    direction: "ltr",
-  },
-  bigGroove: {
-    position: "absolute", left: 0, right: 0,
-    height: 6, borderRadius: 100,
-    background: "rgba(255,255,255,0.08)",
-  },
-  bigFill: {
-    position: "absolute", top: "50%",
-    transform: "translateY(-50%)",
-    left: 0, height: 6, borderRadius: 100,
-  },
-  govNotch: {
-    position: "absolute", top: "50%",
-    transform: "translate(-50%, -50%)",
-    pointerEvents: "none",
-  },
-  govPip: { width: 3, height: 18, borderRadius: 2 },
-  bigThumb: {
-    position: "absolute",
-    width: 28, height: 28,
-    borderRadius: "50%",
-    background: "#fff",
-    top: "50%",
-    transform: "translateY(-50%)",
-    zIndex: 5,
-    cursor: "grab",
-    border: "2.5px solid rgba(255,255,255,0.95)",
-  },
-
-  rangeLabel: { fontSize: 11, color: "var(--text-4)", fontWeight: 500 },
-
-  /* Button row */
-  btnRow: {
-    display: "flex",
-    gap: 10,
-    marginBottom: 16,
-  },
-
-  /* Back button */
-  backBtn: {
-    padding: "17px 22px",
-    color: "var(--text-2)",
-    fontSize: 15, fontWeight: 700,
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.05)",
-    cursor: "pointer",
-    letterSpacing: "-0.01em",
-    transition: "all 0.2s",
-    whiteSpace: "nowrap",
-    flexShrink: 0,
-  },
-
-  /* Next button */
-  nextBtn: {
-    padding: "17px 32px",
-    color: "#fff",
-    fontSize: 17, fontWeight: 700,
-    borderRadius: 16, border: "none",
-    cursor: "pointer",
-    letterSpacing: "-0.01em",
-    transition: "all 0.2s",
-  },
-
-  /* Deficit bar */
-  defBar: {
-    display: "flex", alignItems: "center", justifyContent: "center",
-    gap: 12, flexWrap: "wrap",
-    fontSize: 13, fontWeight: 500,
-    color: "var(--text-3)",
-    padding: "12px 0 0",
-  },
-  defBarSep: { color: "rgba(255,255,255,0.15)" },
 };

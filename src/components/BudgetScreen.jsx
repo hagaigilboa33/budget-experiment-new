@@ -5,10 +5,19 @@ const REVENUE    = 613;
 const MIN_BUDGET = 580;
 const MAX_BUDGET = 820;
 const STEP       = 5;
-const REVENUE_PCT = ((REVENUE - MIN_BUDGET) / (MAX_BUDGET - MIN_BUDGET)) * 100;
+const REVENUE_PCT        = ((REVENUE - MIN_BUDGET) / (MAX_BUDGET - MIN_BUDGET)) * 100;
+const DEFICIT_TARGET     = 694;
+const DEFICIT_GAP        = DEFICIT_TARGET - REVENUE; // 81
+const DEFICIT_TARGET_PCT = ((DEFICIT_TARGET - MIN_BUDGET) / (MAX_BUDGET - MIN_BUDGET)) * 100;
 
-/* Cynical comments by gap (budget - 613) */
+/* Comments by zone */
 const SLIDER_COMMENTS = {
+  withinTarget: [
+    { threshold: 5,  text: "יש לך, יש לך. קצת גירעון עוד לא הרג אף אחד" },
+    { threshold: 30, text: "אפשר לשפוך עוד קצת כסף - הכלכלה תחייך" },
+    { threshold: 60, text: "מתקרב.ת ליעד הגירעון. אם היית שותה, היינו אומרים לעבור למים" },
+    { threshold: 78, text: "שלושה מיליארד מהתקרה. מרגיש את הלחץ?" },
+  ],
   increase: [
     { threshold: 5,   text: "יאללה מסיבה 🎉 מוציאים כסף" },
     { threshold: 20,  text: "שוקולד לכולם. מישהו ישלם את החשבון 🍫" },
@@ -21,16 +30,19 @@ const SLIDER_COMMENTS = {
   decrease: [
     { threshold: 5,   text: "שמרן קצת. בנק ישראל שר לכבודך 🏦" },
     { threshold: 15,  text: "המספריים של אדוארד — הגרסה הישראלית" },
-    { threshold: 25,  text: "שמרן כמו שוויץ — בלי האלפים 🇨🇭" },
+    { threshold: 25,  text: "שמרן כמו שוויץ — בלי האלפים" },
     { threshold: 33,  text: "חותך ללא רחם, קרן המטבע על ענן" },
   ],
 };
 
 function getSliderComment(gap) {
   if (gap === 0) return null;
-  const list = gap > 0 ? SLIDER_COMMENTS.increase : SLIDER_COMMENTS.decrease;
-  const abs  = Math.abs(gap);
-  let best   = null;
+  let list;
+  if (gap < 0)               list = SLIDER_COMMENTS.decrease;
+  else if (gap <= DEFICIT_GAP) list = SLIDER_COMMENTS.withinTarget;
+  else                       list = SLIDER_COMMENTS.increase;
+  const abs = Math.abs(gap);
+  let best  = null;
   for (const item of list) {
     if (abs >= item.threshold) best = item;
   }
@@ -42,7 +54,7 @@ const FINANCING = [
     id: "taxes",
     emoji: "💰",
     label: "אעלה מיסים",
-    cynical: "ישראל כבר בעשירייה הגבוהה של OECD בנטל מס. אבל בטח יש עוד מקום.",
+    cynical: "עכשיו לכולם יהיה ברור למה הם לא גומרים את החודש",
   },
   {
     id: "loans",
@@ -59,9 +71,11 @@ export default function BudgetScreen({ onBudgetSet }) {
   const trackRef = useRef(null);
   const dragging = useRef(false);
 
-  const gap    = budget - REVENUE;
-  const isOver = gap > 0;
-  const pct    = ((budget - MIN_BUDGET) / (MAX_BUDGET - MIN_BUDGET)) * 100;
+  const gap            = budget - REVENUE;
+  const isOver         = gap > 0;
+  const isOverTarget   = gap > DEFICIT_GAP;
+  const showWarnBlink  = isOverTarget;
+  const pct            = ((budget - MIN_BUDGET) / (MAX_BUDGET - MIN_BUDGET)) * 100;
 
   /* ── Slider drag ── */
   const computeVal = clientX => {
@@ -107,16 +121,6 @@ export default function BudgetScreen({ onBudgetSet }) {
 
       <div style={S.shell}>
 
-        {/* Nav */}
-        <div style={S.nav}>
-          <div style={S.navBrand}>
-            <span style={S.navLogo}>כלכליסט</span>
-            <span style={S.navDot} />
-            <span style={S.navSub}>בחירות 2026</span>
-          </div>
-          <span style={S.navStep}>שלב 1 מתוך 2</span>
-        </div>
-
         {/* Title */}
         <motion.div
           style={S.titleBlock}
@@ -138,7 +142,7 @@ export default function BudgetScreen({ onBudgetSet }) {
         >
           <motion.div
             key={budget}
-            style={{ ...S.bigNum, color: isOver ? "#F59E0B" : "#f8fafc" }}
+            style={{ ...S.bigNum, color: isOverTarget ? "#EF4444" : isOver ? "#F59E0B" : "#f8fafc" }}
             initial={{ scale: 1.1 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 400, damping: 22 }}
@@ -154,7 +158,7 @@ export default function BudgetScreen({ onBudgetSet }) {
               {getSliderComment(gap) && (
                 <motion.div
                   key={getSliderComment(gap).text}
-                  style={{ ...S.comment, color: isOver ? "#FCD34D" : "#6EE7B7" }}
+                  style={{ ...S.comment, color: isOverTarget ? "#FCA5A5" : isOver ? "#6EE7B7" : "#6EE7B7" }}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
@@ -172,7 +176,7 @@ export default function BudgetScreen({ onBudgetSet }) {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25, duration: 0.5 }}
-          style={{ position: "relative", paddingTop: 48 }}
+          style={{ position: "relative", paddingTop: 36 }}
         >
           {/* Revenue badge — floats above track */}
           <div style={{
@@ -196,6 +200,7 @@ export default function BudgetScreen({ onBudgetSet }) {
             <div style={S.notchConnector} />
           </div>
 
+
           <div
             ref={trackRef}
             style={S.track}
@@ -207,8 +212,8 @@ export default function BudgetScreen({ onBudgetSet }) {
 
             {/* Fill */}
             <motion.div
-              style={{ ...S.fill, background: isOver ? "#F59E0B" : "#6366F1" }}
-              animate={{ width: `${pct}%`, boxShadow: isOver ? "0 0 14px #F59E0B55" : "0 0 14px #6366F155" }}
+              style={{ ...S.fill, background: isOverTarget ? "#EF4444" : isOver ? "#F59E0B" : "#6366F1" }}
+              animate={{ width: `${pct}%`, boxShadow: isOverTarget ? "0 0 14px #EF444455" : isOver ? "0 0 14px #F59E0B55" : "0 0 14px #6366F155" }}
               transition={{ type: "spring", stiffness: 260, damping: 28 }}
             />
 
@@ -226,6 +231,22 @@ export default function BudgetScreen({ onBudgetSet }) {
               zIndex: 3,
               pointerEvents: "none",
             }} />
+
+
+            {/* Deficit target notch pip — visible only when over target */}
+            {isOverTarget && <div style={{
+              position: "absolute",
+              left: `${DEFICIT_TARGET_PCT}%`,
+              top: "50%",
+              transform: "translateX(-50%) translateY(-50%)",
+              width: 3,
+              height: 18,
+              borderRadius: 1.5,
+              background: "rgba(239,68,68,0.85)",
+              boxShadow: "0 0 8px rgba(239,68,68,0.3)",
+              zIndex: 3,
+              pointerEvents: "none",
+            }} />}
 
             {/* Thumb */}
             <motion.div
@@ -246,20 +267,28 @@ export default function BudgetScreen({ onBudgetSet }) {
         {/* Status */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={isOver ? "over" : gap < 0 ? "under" : "zero"}
+            key={showWarnBlink ? "over-target-blink" : isOver ? "over" : gap < 0 ? "under" : "zero"}
             style={{
               ...S.statusBar,
-              background: isOver ? "rgba(245,158,11,0.1)" : "rgba(16,185,129,0.1)",
-              border: `1px solid ${isOver ? "rgba(245,158,11,0.3)" : "rgba(16,185,129,0.3)"}`,
+              background: isOverTarget ? "rgba(239,68,68,0.1)" : isOver ? "rgba(245,158,11,0.08)" : "rgba(16,185,129,0.1)",
+              border: `1px solid ${isOverTarget ? "rgba(239,68,68,0.3)" : isOver ? "rgba(245,158,11,0.25)" : "rgba(16,185,129,0.3)"}`,
             }}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
           >
-            {isOver ? (
+            {showWarnBlink ? (
+              <motion.span
+                style={{ color: "#EF4444", display: "inline-block" }}
+                animate={{ opacity: [1, 0.25, 1] }}
+                transition={{ duration: 0.75, repeat: Infinity, ease: "easeInOut" }}
+              >
+                ⚠ חצית את יעד הגירעון - 3.4%. עצור בצד
+              </motion.span>
+            ) : isOver ? (
               <span style={{ color: "#F59E0B" }}>
-                ⚠ חורג מההכנסות ב-<strong>{gap}</strong> מיליארד — תצטרך לממן
+                ✓ ההוצאות גבוהות מההכנסות ב-{gap} מיליארד — עדיין בתוך יעד הגירעון
               </span>
             ) : gap === 0 ? (
               <span style={{ color: "#10B981" }}>✓ תקציב מאוזן — עומד בהכנסות הצפויות לשנת 2027</span>
@@ -366,7 +395,8 @@ const S = {
     background: "#030507",
     position: "relative",
     overflow: "hidden",
-    padding: "0 0 60px",
+    display: "flex",
+    alignItems: "center",
   },
   bgGrad: {
     position: "fixed", inset: 0, pointerEvents: "none",
@@ -384,9 +414,10 @@ const S = {
   shell: {
     maxWidth: 600,
     margin: "0 auto",
-    padding: "0 20px",
+    padding: "24px 20px 20px",
     position: "relative",
     zIndex: 10,
+    width: "100%",
   },
 
   nav: {
@@ -403,20 +434,20 @@ const S = {
   navSub:   { fontSize: 12, color: "rgba(255,255,255,0.3)", fontWeight: 500 },
   navStep:  { fontSize: 11, fontWeight: 700, color: "rgba(99,102,241,0.7)", letterSpacing: "0.1em", textTransform: "uppercase" },
 
-  titleBlock: { marginBottom: 28, textAlign: "center" },
+  titleBlock: { marginBottom: 16, textAlign: "center" },
   eyebrow: {
     fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
-    textTransform: "uppercase", color: "rgba(99,102,241,0.7)", marginBottom: 10,
+    textTransform: "uppercase", color: "rgba(99,102,241,0.7)", marginBottom: 8,
   },
   title: {
-    fontSize: "clamp(26px, 6vw, 38px)", fontWeight: 900,
-    color: "#f8fafc", letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 8,
+    fontSize: "clamp(22px, 5.5vw, 32px)", fontWeight: 900,
+    color: "#f8fafc", letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 6,
   },
-  subtitle: { fontSize: 15, color: "rgba(255,255,255,0.3)", fontWeight: 400 },
+  subtitle: { fontSize: 13, color: "rgba(255,255,255,0.3)", fontWeight: 400 },
 
-  bigNumWrap: { textAlign: "center", marginBottom: 36 },
+  bigNumWrap: { textAlign: "center", marginBottom: 20 },
   bigNum: {
-    fontSize: "clamp(80px, 18vw, 130px)",
+    fontSize: "clamp(64px, 15vw, 108px)",
     fontWeight: 900,
     letterSpacing: "-0.05em",
     lineHeight: 1,
@@ -424,9 +455,9 @@ const S = {
     fontVariantNumeric: "tabular-nums",
     fontFamily: "'Inter', system-ui, sans-serif",
   },
-  bigNumSub: { fontSize: 15, color: "rgba(255,255,255,0.25)", fontWeight: 500, marginTop: 6 },
-  bigNumNote: { fontSize: 11, color: "rgba(99,102,241,0.6)", fontWeight: 500, marginTop: 4, letterSpacing: "0.02em" },
-  commentSlot: { minHeight: 28, marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center" },
+  bigNumSub: { fontSize: 14, color: "rgba(255,255,255,0.25)", fontWeight: 500, marginTop: 4 },
+  bigNumNote: { fontSize: 11, color: "rgba(99,102,241,0.6)", fontWeight: 500, marginTop: 3, letterSpacing: "0.02em" },
+  commentSlot: { minHeight: 24, marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center" },
   comment: { fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em", textAlign: "center", lineHeight: 1.4 },
 
   /* Slider */
@@ -479,6 +510,35 @@ const S = {
     width: 1, height: 12,
     background: "rgba(16,185,129,0.28)",
   },
+
+  notchBadgeRed: {
+    background: "rgba(239,68,68,0.07)",
+    border: "1px solid rgba(239,68,68,0.22)",
+    borderRadius: 8,
+    padding: "5px 12px",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 2,
+  },
+  notchBadgeTopRed: {
+    fontSize: 12, fontWeight: 700,
+    letterSpacing: "0.02em", color: "rgba(239,68,68,0.85)",
+  },
+  notchBadgeNumRed: {
+    fontSize: 22, fontWeight: 900, color: "rgba(239,68,68,1)",
+    letterSpacing: "-0.02em",
+  },
+  notchBadgeLabelRed: {
+    fontSize: 14, fontWeight: 600, color: "rgba(239,68,68,0.9)",
+    letterSpacing: "0.01em",
+  },
+  notchConnectorRed: {
+    width: 1, height: 12,
+    background: "rgba(239,68,68,0.28)",
+  },
   thumb: {
     position: "absolute",
     width: 28, height: 28,
@@ -495,16 +555,16 @@ const S = {
     display: "flex",
     justifyContent: "space-between",
     direction: "ltr",
-    marginBottom: 20,
+    marginBottom: 14,
   },
   sliderEndText: { fontSize: 11, color: "rgba(255,255,255,0.18)", fontWeight: 500 },
 
   statusBar: {
-    padding: "14px 18px",
+    padding: "12px 18px",
     borderRadius: 14,
     fontSize: 13, fontWeight: 500,
     lineHeight: 1.5,
-    marginBottom: 24,
+    marginBottom: 16,
     textAlign: "center",
   },
 

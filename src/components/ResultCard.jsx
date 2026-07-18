@@ -3,111 +3,254 @@ import { motion } from "framer-motion";
 import html2canvas from "html2canvas";
 import { CATEGORIES, calcDeficit } from "../data/budgetData";
 
-const GOV_DEFICIT = 4.9;
-const BOI_TARGET  = 3.5;
-const GDP         = 2420; // תמ"ג 2027
+const BOI_TARGET = 3.5;
+const GDP        = 2420;
+const REVENUE    = 613;
+const OTHER      = 120;
 
 const SHORT = {
-  defense:        "ביטחון",
-  education:      "חינוך",
-  health:         "בריאות",
-  welfare:        "ביטוח לאומי",
-  infrastructure: "תחבורה",
-  social:         "רווחה",
-  government:     "ממשל",
+  defense:             "ביטחון",
+  education:           "חינוך",
+  health:              "בריאות",
+  welfare:             "ביטוח לאומי",
+  transport_subsidy:   "סבסוד תחב'",
+  holocaust_survivors: "ניצולי שואה",
+  immigration:         "עולים",
+  national_security:   "משטרה",
+  intelligence:        "מודיעין",
+  veterans:            "חיילים",
+  otef:                "עוטף",
+  north:               "פיתוח צפון",
+  economy:             "כלכלה",
+  agriculture:         "חקלאות",
+  environment:         "סביבה",
+  transport:           "תחבורה",
+  housing:             "דיור",
+  energy:              "אנרגיה",
+  justice:             "משפטים",
+  foreign:             "חוץ",
+  knesset:             "כנסת",
+};
+
+const FINANCE_LABEL = {
+  taxes: "העלאת מיסים 💰",
+  loans: "גיוס הלוואות 🏦",
 };
 
 /* ═══════════════════════════════════
-   ANALYSIS PARAGRAPH — flowing editorial text
+   ANALYSIS — editorial, delta-focused
 ═══════════════════════════════════ */
 function buildAnalysis(withDelta, deficit) {
-  const get = id => withDelta.find(c => c.id === id);
+  const parts  = [];
+  const raises = withDelta.filter(c => c.delta >= 3).sort((a, b) => b.delta - a.delta);
+  const cuts   = withDelta.filter(c => c.delta <= -3).sort((a, b) => a.delta - b.delta);
 
-  const defDelta  = get("defense").delta;
-  const defVal    = get("defense").value;
-  const defPct    = (defVal / GDP * 100).toFixed(1);
-  const hlthDelta = get("health").delta;
-  const eduDelta  = get("education").delta;
-  const wlfrDelta = get("welfare").delta;
-  const socDelta  = get("social").delta;
-  const infrDelta = get("infrastructure").delta;
-
-  const civilianDelta = hlthDelta + eduDelta + wlfrDelta + socDelta + infrDelta;
-  const hlthEduVal    = get("health").value + get("education").value;
-  const hlthEduPct    = (hlthEduVal / GDP * 100).toFixed(1);
-  const hlthEduDelta  = hlthDelta + eduDelta;
-  const totalDelta    = withDelta.reduce((s, c) => s + c.delta, 0);
-
-  const sorted   = [...withDelta].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  const topMover = sorted[0];
-  const topDown  = sorted.filter(c => c.delta <= -4 && c.id !== "defense")[0];
-
-  const parts = [];
-
-  /* ── משפט 1: אופי התקציב ── */
-  if (defDelta >= 20) {
-    const src = topDown
-      ? `${topDown.shortLabel} ספג קיצוץ של ${Math.abs(topDown.delta)} מיליארד`
-      : `הגירעון מממן את ההפרש`;
-    parts.push(`תוספת של ${defDelta} מיליארד לביטחון מציבה את ישראל על ${defPct}% מהתמ"ג — בין שלוש המדינות הגבוהות ביותר בעולם; ${src}.`);
-  } else if (defDelta >= 8) {
-    const note = topDown ? `; ${topDown.shortLabel} שילם את המחיר` : ``;
-    parts.push(`${defDelta} מיליארד נוספים לביטחון מביאים את ישראל ל-${defPct}% מהתמ"ג, מעל הרמה הנוכחית (5.9%)${note}.`);
-  } else if (defDelta <= -15 && civilianDelta >= 10) {
-    parts.push(`${Math.abs(defDelta)} מיליארד מועברים מביטחון לשירותים אזרחיים — העברת משאבים שאף ממשלה ישראלית לא ביצעה ב-20 שנה.`);
-  } else if (defDelta <= -8) {
-    const note = civilianDelta > 5 ? `; ${civilianDelta} מיליארד הופנו לשירותים אזרחיים` : ``;
-    parts.push(`ריסון ביטחוני של ${Math.abs(defDelta)} מיליארד מוריד את ישראל ל-${defPct}% מהתמ"ג${note}.`);
-  } else if (civilianDelta >= 20) {
-    parts.push(`${civilianDelta} מיליארד נוספים לשירותים האזרחיים — ביטחון נשמר על ${defPct}% מהתמ"ג.`);
-  } else if (totalDelta <= -15) {
-    parts.push(`קיצוץ כולל של ${Math.abs(totalDelta)} מיליארד — ממשל מינימליסטי שמוציא פחות מהממשלה הנוכחית.`);
-  } else if (topMover && Math.abs(topMover.delta) >= 6) {
-    const dir = topMover.delta > 0 ? `+` : ``;
-    const note = topDown
-      ? `, על חשבון ${topDown.shortLabel} (${topDown.delta} מיליארד)`
-      : topMover.delta > 0 ? `, מומן מגירעון` : ``;
-    parts.push(`ההימור הגדול: ${dir}${topMover.delta} מיליארד ל${topMover.shortLabel}${note}.`);
+  /* ── Increases ── */
+  if (raises.length === 0) {
+    parts.push(`לא הגדלת אף סעיף בצורה משמעותית — תקציב שמרני שמרבה על הקיים.`);
   } else {
-    parts.push(`בחירות שמרניות — רוב הקטגוריות קרובות לתקציב הממשלה הנוכחית.`);
+    const top = raises[0];
+    const list = raises.slice(0, 2).map(c => `${c.shortLabel} (+${c.delta} מיליארד)`).join(" ו-");
+    parts.push(`הגדלת בעיקר: ${list}.`);
+    if (top.id === "defense")
+      parts.push(`ישראל תגיע ל-${(top.value / GDP * 100).toFixed(1)}% מהתמ"ג על ביטחון — מהגבוהות בעולם. הרתעה חזקה, אבל פחות כסף לשירותים אזרחיים.`);
+    else if (top.id === "education")
+      parts.push(`השקעה בחינוך — תוצאות יגיעו בעוד עשור. כיתות קטנות יותר, מורים טובים יותר.`);
+    else if (top.id === "health")
+      parts.push(`בריאות מקבלת חיזוק — תורי הרופאים יתקצרו, יותר מיטות אשפוז. ישראל עדיין מתחת לממוצע OECD.`);
+    else if (top.id === "welfare")
+      parts.push(`רשת הביטחון הסוציאלי מתחזקת — קצבאות גבוהות יותר לנכים, קשישים וחד-הוריות.`);
+    else if (top.id === "transport")
+      parts.push(`תשתיות תחבורה — ROI ברור: פחות פקק, יותר פריון, מטרו מהיר יותר.`);
+    else if (top.id === "housing")
+      parts.push(`יותר יחידות דיור ציבוריות — סיכוי אמיתי להוריד שכר דירה.`);
+    else if (top.id === "otef")
+      parts.push(`תושבי העוטף וסביבתו חוזרים לבתיהם מהר יותר.`);
   }
 
-  /* ── משפט 2: בריאות + חינוך ── */
-  if (hlthEduDelta >= 12) {
-    parts.push(`בריאות וחינוך קיבלו ${hlthEduDelta} מיליארד נוספים (${hlthEduPct}% מהתמ"ג) — מתקרב לממוצע OECD של 10.5%.`);
-  } else if (hlthEduDelta <= -6) {
-    parts.push(`בריאות וחינוך קוצצו ב-${Math.abs(hlthEduDelta)} מיליארד — ישראל מתרחקת עוד מממוצע OECD של 10.5% מהתמ"ג.`);
-  } else if (hlthEduDelta >= 5) {
-    parts.push(`בריאות וחינוך עלו ב-${hlthEduDelta} מיליארד ל-${hlthEduPct}% מהתמ"ג — צעד נכון, הפער מ-OECD (10.5%) נשאר.`);
+  /* ── Cuts ── */
+  if (cuts.length === 0) {
+    parts.push(`לא קיצצת בצורה משמעותית — הגידול ממומן מגירעון גבוה יותר.`);
   } else {
-    parts.push(`בריאות וחינוך נשארו ב-${hlthEduPct}% מהתמ"ג — 3% מתחת לממוצע OECD, ללא שינוי.`);
+    const top  = cuts[0];
+    const list = cuts.slice(0, 2).map(c => `${c.shortLabel} (${c.delta} מיליארד)`).join(" ו-");
+    parts.push(`קיצצת בעיקר: ${list}.`);
+    if (top.id === "defense" && top.delta <= -8)
+      parts.push(`קיצוץ ביטחוני משמעותי — מאפשר להפנות משאבים לאזרחים, אבל יורד מהרתעה.`);
+    else if (top.id === "education" && top.delta <= -8)
+      parts.push(`קיצוץ בחינוך כואב לאורך זמן — פגיעה בדור הבא.`);
+    else if (top.id === "welfare" && top.delta <= -5)
+      parts.push(`קיצוץ ברווחה — הנכים, הקשישים והחד-הוריות ישלמו את המחיר.`);
+    else if (top.id === "health" && top.delta <= -5)
+      parts.push(`קיצוץ בבריאות — תורים ארוכים, יותר אנשים עוברים לביטוח פרטי.`);
   }
 
-  /* ── משפט 3: פסיקה פיסקלית ── */
-  if (deficit < 2.5) {
-    parts.push(`הגירעון ${deficit}% — איזון כמעט מלא, לא נראה בישראל מ-2000; שוקי האג"ח ישמחו.`);
-  } else if (deficit < BOI_TARGET) {
-    parts.push(`הגירעון ${deficit}% — מתחת ליעד בנק ישראל (3.5%), שלא הושג ב-15 שנה; דירוג האשראי בכיוון.`);
-  } else if (deficit < GOV_DEFICIT) {
-    parts.push(`הגירעון ${deficit}% — נמוך ב-${(GOV_DEFICIT - deficit).toFixed(1)}% מהממשלה הנוכחית, אבל מעל יעד בנק ישראל (3.5%).`);
-  } else if (deficit < 6.5) {
-    parts.push(`הגירעון ${deficit}% — ${(deficit - GOV_DEFICIT).toFixed(1)}% מעל ממשלה שגם היא בבעיה; הריבית על החוב כבר 65 מיליארד ₪ לשנה.`);
-  } else {
-    parts.push(`הגירעון ${deficit}% — בטריטוריה מסוכנת; S&P ו-Moody's שמים לב, וכל 1% = ~24 מיליארד ₪ חוב חדש.`);
-  }
+  /* ── Deficit ── */
+  if (deficit < BOI_TARGET)
+    parts.push(`הגירעון ${deficit}% — מתחת ליעד בנק ישראל (3.5%), שלא הושג מזה שנים.`);
+  else if (deficit < 5)
+    parts.push(`הגירעון ${deficit}% — ${(deficit - BOI_TARGET).toFixed(1)}% מעל יעד בנק ישראל (3.5%).`);
+  else
+    parts.push(`הגירעון ${deficit}% — גבוה; כל 1% = ~24 מיליארד ₪ חוב חדש לדורות הבאים.`);
 
   return parts.join(" ");
 }
 
 /* ═══════════════════════════════════
+   PRIORITY BLOCK
+═══════════════════════════════════ */
+function PriorityBlock({ items, isIncrease }) {
+  const color = isIncrease ? "#34D399" : "#F87171";
+  const label = isIncrease ? "📈  אשקיע יותר ב" : "📉  אשקיע פחות ב";
+  return (
+    <div style={{ ...S.priorityBlock, borderColor: color + "44", background: color + "0C" }}>
+      <div style={{ ...S.priorityBlockLabel, color }}>{label}</div>
+      {items.map((c, i) => (
+        <div key={c.id}>
+          <div style={S.priorityItemRow}>
+            <span style={S.priorityEmoji}>{c.emoji}</span>
+            <span style={{ ...S.priorityItemDelta, color }}>
+              {isIncrease ? "+" : ""}{c.delta} מיליארד
+            </span>
+            <span style={S.priorityItemName}>{c.shortLabel}</span>
+          </div>
+          {i < items.length - 1 && <div style={S.prioritySep} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
+   BUDGET BARS
+═══════════════════════════════════ */
+function BudgetBars({ withDelta }) {
+  const THRESHOLD = 2;
+  const increases = withDelta.filter(c => c.delta >= THRESHOLD).sort((a, b) => b.delta - a.delta);
+  const cuts      = withDelta.filter(c => c.delta <= -THRESHOLD).sort((a, b) => a.delta - b.delta);
+  const unchanged = withDelta.filter(c => Math.abs(c.delta) < THRESHOLD);
+
+  const maxAbs = Math.max(
+    increases.length ? increases[0].delta : 0,
+    cuts.length      ? Math.abs(cuts[0].delta) : 0,
+    1,
+  );
+
+  return (
+    <div>
+      {increases.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={S.barGroupHead}>
+            <span style={{ ...S.barGroupLabel, color: "#34D399" }}>📈  הגדלות</span>
+            <span style={S.barGroupCount}>{increases.length} סעיפים</span>
+          </div>
+          {increases.map(cat => (
+            <BarRow key={cat.id} cat={cat} maxAbs={maxAbs} isIncrease={true} />
+          ))}
+        </div>
+      )}
+
+      {cuts.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={S.barGroupHead}>
+            <span style={{ ...S.barGroupLabel, color: "#F87171" }}>📉  קיצוצים</span>
+            <span style={S.barGroupCount}>{cuts.length} סעיפים</span>
+          </div>
+          {cuts.map(cat => (
+            <BarRow key={cat.id} cat={cat} maxAbs={maxAbs} isIncrease={false} />
+          ))}
+        </div>
+      )}
+
+      {unchanged.length > 0 && (
+        <div style={S.unchangedRow}>
+          <span style={S.unchangedTitle}>ללא שינוי משמעותי — </span>
+          <span style={S.unchangedList}>
+            {unchanged.length <= 5
+              ? unchanged.map(c => c.shortLabel).join(" · ")
+              : `${unchanged.slice(0, 3).map(c => c.shortLabel).join(", ")} ועוד ${unchanged.length - 3}`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BarRow({ cat, maxAbs, isIncrease }) {
+  const color = isIncrease ? "#34D399" : "#F87171";
+  const pct   = Math.max(4, (Math.abs(cat.delta) / maxAbs) * 100);
+
+  return (
+    <div style={S.barRow}>
+      <div style={S.barLabelWrap}>
+        <span style={{ fontSize: 13, lineHeight: 1, flexShrink: 0 }}>{cat.emoji}</span>
+        <span style={S.barName}>{cat.shortLabel}</span>
+      </div>
+      <div style={S.barTrackOuter}>
+        <div style={{
+          height: "100%", width: `${pct}%`,
+          background: `linear-gradient(90deg, ${color}99, ${color})`,
+          borderRadius: 4,
+          boxShadow: `0 0 6px ${color}33`,
+        }} />
+      </div>
+      <div style={{ ...S.barDelta, color }}>
+        {isIncrease ? "+" : ""}{cat.delta}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
+   DNA BAR
+═══════════════════════════════════ */
+function BudgetDnaBar({ withDelta }) {
+  return (
+    <div style={S.dna}>
+      <div style={S.dnaBar}>
+        {withDelta.map(cat => (
+          <div
+            key={cat.id}
+            title={`${cat.shortLabel}: ${cat.value}`}
+            style={{ flex: cat.value, background: cat.color, opacity: Math.abs(cat.delta) >= 2 ? 0.85 : 0.35 }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
+   STAT BLOCK
+═══════════════════════════════════ */
+function StatBlock({ label, value, sub, subColor = "rgba(255,255,255,0.45)" }) {
+  return (
+    <div style={S.statBlock}>
+      <div style={S.statLabel}>{label}</div>
+      <div style={S.statValue}>{value}</div>
+      {sub && <div style={{ ...S.statSub, color: subColor }}>{sub}</div>}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
    MAIN
 ═══════════════════════════════════ */
-export default function ResultCard({ values, name, onRestart }) {
+export default function ResultCard({ values, name, onRestart, totalBudget = 613, financingMethod }) {
   const cardRef = useRef(null);
   const [saving, setSaving] = useState(false);
 
   const deficit  = parseFloat(calcDeficit(values));
   const defColor = deficit < 3.5 ? "#10B981" : deficit < 5.5 ? "#F59E0B" : "#EF4444";
+  const vsBOI    = parseFloat((deficit - BOI_TARGET).toFixed(1));
+  const boiColor = deficit < BOI_TARGET ? "#34D399" : deficit < 5 ? "#F59E0B" : "#F87171";
+
+  const boiVerdict =
+    deficit < 2          ? "מצוין — גירעון נמוך" :
+    deficit < BOI_TARGET ? "סביר — מתחת ליעד" :
+    deficit < 5          ? "גבוה מהיעד" :
+    deficit < 7          ? "גירעון גבוה — בעייתי" :
+                           "גירעון מסוכן 🚨";
 
   const withDelta = CATEGORIES.map(c => ({
     ...c,
@@ -118,18 +261,28 @@ export default function ResultCard({ values, name, onRestart }) {
 
   const analysisParagraph = buildAnalysis(withDelta, deficit);
 
-  const vsGov = (deficit - GOV_DEFICIT).toFixed(1);
-  const vsBOI = (deficit - BOI_TARGET).toFixed(1);
-  const govColor = deficit < GOV_DEFICIT ? "#34D399" : "#F87171";
-  const boiColor = deficit < BOI_TARGET  ? "#34D399" : deficit < 5 ? "#F59E0B" : "#F87171";
+  const budgetGrowth = totalBudget - REVENUE;
+  const available    = totalBudget - OTHER;
+  const allocated    = parseFloat(CATEGORIES.reduce((s, c) => s + values[c.id], 0).toFixed(1));
+  const remaining    = parseFloat((available - allocated).toFixed(1));
+
+  const SUMMARY_THRESHOLD = 2;
+  const topIncreases = withDelta.filter(c => c.delta >= SUMMARY_THRESHOLD).sort((a, b) => b.delta - a.delta).slice(0, 5);
+  const topCuts      = withDelta.filter(c => c.delta <= -SUMMARY_THRESHOLD).sort((a, b) => a.delta - b.delta).slice(0, 5);
+
+  const varColor = Math.abs(remaining) <= 2 ? "#34D399" : remaining > 0 ? "#F59E0B" : "#EF4444";
+  const varText  = Math.abs(remaining) <= 2
+    ? `✓ חילקת כמעט בדיוק את התקציב הזמין (${available} מיליארד)`
+    : remaining > 0
+    ? `שימו לב: נותרו ${remaining} מיליארד שלא חולקו`
+    : `שימו לב: הוצאת ${Math.abs(remaining)} מיליארד יותר מהקבוע בתקציב`;
 
   /* save as image */
   const handleSave = async () => {
     setSaving(true);
     try {
       const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: "#070B14",
-        scale: 2, useCORS: true, logging: false,
+        backgroundColor: "#070B14", scale: 2, useCORS: true, logging: false,
       });
       const blob = await new Promise(r => canvas.toBlob(r, "image/png"));
       const file = new File([blob], `תקציב-${name}.png`, { type: "image/png" });
@@ -153,12 +306,11 @@ export default function ResultCard({ values, name, onRestart }) {
     const lines = [
       `🇮🇱 בניתי את תקציב המדינה שלי עם כלכליסט`,
       ``,
-      `הגירעון שלי: ${deficit}% | ממשלה: ${GOV_DEFICIT}%`,
+      `גירעון: ${deficit}% | יעד בנק ישראל: ${BOI_TARGET}%`,
       ...top.map(c => `${c.delta > 0 ? "📈" : "📉"} ${c.shortLabel}: ${c.delta > 0 ? "+" : ""}${c.delta} מיליארד ₪`),
       ``,
       `בנה גם אתה 👇`,
-      `calcalist.co.il/budget`,
-    ].filter(Boolean).join("\n");
+    ].join("\n");
     window.open(`https://wa.me/?text=${encodeURIComponent(lines)}`, "_blank");
   };
 
@@ -177,8 +329,6 @@ export default function ResultCard({ values, name, onRestart }) {
         <div style={S.pageHeader}>
           <div style={S.navBrand}>
             <span style={S.navLogo}>כלכליסט</span>
-            <span style={S.navDot} />
-            <span style={S.navSub}>בחירות 2026</span>
           </div>
           <span style={S.pageTitle}>הכרטיס שלך מוכן</span>
         </div>
@@ -186,104 +336,110 @@ export default function ResultCard({ values, name, onRestart }) {
         {/* CARD */}
         <div
           ref={cardRef}
-          style={{
-            ...S.card,
-            boxShadow: `0 0 0 1.5px ${defColor}28, 0 40px 100px rgba(0,0,0,0.7)`,
-          }}
+          style={{ ...S.card, boxShadow: `0 0 0 1.5px ${defColor}28, 0 40px 100px rgba(0,0,0,0.7)` }}
         >
+
           {/* ── HERO ── */}
           <div style={S.hero}>
-            {/* atmospheric glow */}
             <div style={{
               position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
               background: `radial-gradient(ellipse 90% 70% at 50% -5%, ${defColor}28 0%, transparent 65%)`,
             }} />
 
-            <div style={S.heroMeta}>📊 calcalist.co.il/budget · בחירות 2026</div>
-
-            {/* name + deficit badge */}
             <div style={S.heroRow}>
               <div style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
                 <div style={S.heroSup}>שר האוצר</div>
                 <div style={S.heroName}>{name}</div>
               </div>
-              <div style={{
-                ...S.defBadge,
-                borderColor: defColor + "55",
-                background:  defColor + "14",
-              }}>
+              <div style={{ ...S.defBadge, borderColor: defColor + "55", background: defColor + "14" }}>
                 <div style={{ ...S.defNum, color: defColor }}>{deficit}%</div>
                 <div style={S.defLabel}>גירעון</div>
               </div>
             </div>
 
-            {/* deficit targets — replaces persona tag */}
-            <div style={S.defTargetRow}>
-              <div style={S.defTargetBlock}>
-                <span style={{ ...S.defTargetLabel }}>יעד בנק ישראל</span>
-                <span style={{ ...S.defTargetNum, color: boiColor }}>
-                  {parseFloat(vsBOI) > 0 ? `▲ ${vsBOI}%` : `▼ ${Math.abs(parseFloat(vsBOI)).toFixed(1)}%`}
-                </span>
-                <span style={S.defTargetBase}>יעד: 3.5%</span>
+            {/* BOI target */}
+            <div style={S.boiRow}>
+              <div>
+                <div style={S.boiLabel}>יעד בנק ישראל — 3.5%</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
+                  {vsBOI > 0 ? `▲ ${vsBOI}% מעל היעד` : `▼ ${Math.abs(vsBOI).toFixed(1)}% מתחת ליעד`}
+                </div>
               </div>
-              <div style={S.defTargetDivider} />
-              <div style={S.defTargetBlock}>
-                <span style={S.defTargetLabel}>ממשלה נוכחית</span>
-                <span style={{ ...S.defTargetNum, color: govColor }}>
-                  {parseFloat(vsGov) > 0 ? `▲ ${vsGov}%` : `▼ ${Math.abs(parseFloat(vsGov)).toFixed(1)}%`}
-                </span>
-                <span style={S.defTargetBase}>ממשלה: 4.9%</span>
-              </div>
+              <div style={{ ...S.boiDiff, color: boiColor }}>{boiVerdict}</div>
             </div>
           </div>
 
-          {/* ── BUDGET DNA BAR ── */}
+          {/* ── DNA BAR ── */}
           <BudgetDnaBar withDelta={withDelta} />
 
-          {/* ── ALLOCATION ROWS ── */}
-          <div style={S.alloc}>
-            <div style={S.allocHead}>
-              <span style={S.allocTitle}>חלוקת התקציב שלי</span>
-              <span style={S.allocLegend}>
-                <span style={{ color: "rgba(255,255,255,0.28)" }}>▎</span> ממשלה · מיליארד ₪
-              </span>
+          {/* ── BUDGET STATS ── */}
+          <div style={S.section}>
+            <div style={S.sectionLabel}>על התקציב שקבעת</div>
+            <div style={S.statGrid}>
+              <StatBlock
+                label="גודל התקציב"
+                value={`${totalBudget} מיליארד ₪`}
+                sub={
+                  budgetGrowth > 0
+                    ? `מעל צפי ההכנסות ב-${budgetGrowth} מיליארד`
+                    : budgetGrowth < 0
+                    ? `מתחת לצפי ההכנסות ב-${Math.abs(budgetGrowth)} מיליארד`
+                    : `שווה לצפי ההכנסות — תקציב מאוזן`
+                }
+                subColor={budgetGrowth > 0 ? "#F59E0B" : budgetGrowth < 0 ? "#34D399" : "rgba(255,255,255,0.28)"}
+              />
+              <StatBlock
+                label={financingMethod ? "איך נממן" : "אופי התקציב"}
+                value={
+                  financingMethod
+                    ? FINANCE_LABEL[financingMethod]
+                    : budgetGrowth < 0 ? "קיצוץ הוצאות 📉" : "מסגרת קיימת ✓"
+                }
+                sub={
+                  financingMethod === "taxes"
+                    ? "הכנסות גבוהות — שכר ביד פחות"
+                    : financingMethod === "loans"
+                    ? "חוב גדל — הדור הבא ישלם"
+                    : budgetGrowth < 0
+                    ? "גירעון נמוך, הוצאות מצומצמות"
+                    : "ניהול במסגרת ההכנסות"
+                }
+              />
             </div>
-            {withDelta.map(cat => {
-              const pct    = (cat.value  / cat.max) * 100;
-              const govPct = (cat.current / cat.max) * 100;
-              const isUp   = cat.delta > 0;
-              const nc     = Math.abs(cat.delta) < 1;
-              const dc     = nc ? "#334155" : isUp ? "#34D399" : "#F87171";
-              return (
-                <div key={cat.id} style={S.aRow}>
-                  <div style={S.aLabel}>
-                    <span style={{ fontSize: 13, lineHeight: 1 }}>{cat.emoji}</span>
-                    <span style={S.aName}>{cat.shortLabel}</span>
-                  </div>
-                  <div style={S.aBarWrap}>
-                    <div style={S.aTrack} />
-                    <div style={{ ...S.aGovMark, left: `${govPct}%` }} />
-                    <div style={{
-                      ...S.aFill,
-                      width:      `${pct}%`,
-                      background: nc ? cat.color + "4D" : cat.color + "99",
-                    }} />
-                  </div>
-                  <div style={S.aRight}>
-                    <span style={{ ...S.aVal, direction: "ltr" }}>{cat.value}</span>
-                    {!nc && (
-                      <span style={{ ...S.aDelta, color: dc, direction: "ltr" }}>
-                        {isUp ? "+" : ""}{cat.delta}
-                      </span>
-                    )}
-                    {nc && <span style={S.aDeltaNc}>—</span>}
-                  </div>
-                </div>
-              );
-            })}
           </div>
 
-          {/* ── SMART ANALYSIS ── */}
+          {/* ── ALLOCATION VARIANCE ── */}
+          <div style={{ ...S.section, paddingTop: 0 }}>
+            <div style={{
+              padding: "10px 14px", borderRadius: 10,
+              background: varColor + "14", border: `1px solid ${varColor}33`,
+              fontSize: 12.5, fontWeight: 600, color: varColor, lineHeight: 1.5,
+            }}>
+              {varText}
+            </div>
+          </div>
+
+          {/* ── BUDGET BARS ── */}
+          <div style={S.section}>
+            <div style={S.sectionLabel}>התקציב שלי</div>
+
+            {/* Priority summary */}
+            {(topIncreases.length > 0 || topCuts.length > 0) && (
+              <div style={S.prioritySummary}>
+                {topIncreases.length > 0 && (
+                  <PriorityBlock items={topIncreases} isIncrease={true} />
+                )}
+                {topCuts.length > 0 && (
+                  <PriorityBlock items={topCuts} isIncrease={false} />
+                )}
+              </div>
+            )}
+
+            <div style={S.barsSubLabel}>שינויים ביחס לתקציב הנוכחי</div>
+            <BudgetBars withDelta={withDelta} />
+          </div>
+
+          {/* ── ANALYSIS ── */}
           <div style={S.analysis}>
             <div style={S.sectionLabel}>ניתוח</div>
             <motion.p
@@ -299,8 +455,8 @@ export default function ResultCard({ values, name, onRestart }) {
           {/* ── CARD FOOTER ── */}
           <div style={S.cardFooter}>
             <span style={S.footerCta}>בנה את התקציב שלך ←</span>
-            <span style={S.footerUrl}>calcalist.co.il/budget</span>
           </div>
+
         </div>
 
         {/* SHARE BUTTONS */}
@@ -325,30 +481,8 @@ export default function ResultCard({ values, name, onRestart }) {
           </motion.button>
           <button style={S.btnRestart} onClick={onRestart}>↩ נסה שוב</button>
         </div>
-      </motion.div>
-    </div>
-  );
-}
 
-/* ═══════════════════════════════════
-   BUDGET DNA BAR
-═══════════════════════════════════ */
-function BudgetDnaBar({ withDelta }) {
-  return (
-    <div style={S.dna}>
-      <div style={S.dnaBar}>
-        {withDelta.map(cat => (
-          <div
-            key={cat.id}
-            title={`${cat.shortLabel}: ${cat.value}B`}
-            style={{
-              flex: cat.value,
-              background: cat.color,
-              opacity: Math.abs(cat.delta) >= 2 ? 0.85 : 0.35,
-            }}
-          />
-        ))}
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -366,11 +500,9 @@ const S = {
   },
   navBrand:  { display: "flex", alignItems: "center", gap: 8 },
   navLogo:   { fontSize: 14, fontWeight: 800, color: "var(--text-1)", letterSpacing: "-0.02em" },
-  navDot:    { width: 4, height: 4, borderRadius: "50%", background: "var(--text-3)" },
-  navSub:    { fontSize: 12, color: "var(--text-3)", fontWeight: 500 },
   pageTitle: { fontSize: 13, fontWeight: 600, color: "var(--text-2)" },
 
-  /* card */
+  /* CARD */
   card: {
     background: "#070B14",
     border: "1px solid rgba(255,255,255,0.08)",
@@ -384,121 +516,147 @@ const S = {
     background: "linear-gradient(180deg, #0D1525 0%, #080C18 100%)",
     borderBottom: "1px solid rgba(255,255,255,0.06)",
   },
-  heroMeta: {
-    fontSize: 10, color: "rgba(255,255,255,0.22)", fontWeight: 500,
-    letterSpacing: "0.03em", marginBottom: 18, position: "relative", zIndex: 1,
-  },
   heroRow: {
     display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-    gap: 14, marginBottom: 16,
+    gap: 14, marginBottom: 14,
   },
   heroSup: {
-    fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.28)",
+    fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)",
     letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4, position: "relative", zIndex: 1,
   },
   heroName: {
     fontSize: "clamp(26px, 6.5vw, 36px)", fontWeight: 900,
-    color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.05,
-    position: "relative", zIndex: 1,
+    color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.05, position: "relative", zIndex: 1,
   },
   defBadge: {
     flexShrink: 0, padding: "12px 18px", borderRadius: 16,
     textAlign: "center", border: "1.5px solid", position: "relative", zIndex: 1,
   },
   defNum: {
-    fontSize: "clamp(28px, 7vw, 38px)", fontWeight: 900,
-    letterSpacing: "-0.04em", lineHeight: 1,
+    fontSize: "clamp(28px, 7vw, 38px)", fontWeight: 900, letterSpacing: "-0.04em", lineHeight: 1,
   },
   defLabel: {
     fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
     textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginTop: 3,
   },
 
-  /* deficit targets row (replaces persona) */
-  defTargetRow: {
-    display: "flex", alignItems: "stretch", gap: 0,
-    background: "rgba(255,255,255,0.03)", borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.07)",
-    overflow: "hidden", position: "relative", zIndex: 1,
+  /* BOI row */
+  boiRow: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
+    borderRadius: 10, padding: "9px 14px", position: "relative", zIndex: 1,
   },
-  defTargetBlock: {
-    flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-    padding: "10px 12px", gap: 2,
-  },
-  defTargetDivider: {
-    width: 1, background: "rgba(255,255,255,0.07)", margin: "8px 0",
-  },
-  defTargetLabel: {
-    fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-    textTransform: "uppercase", color: "rgba(255,255,255,0.3)",
-  },
-  defTargetNum: {
-    fontSize: 16, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1.2,
-  },
-  defTargetBase: {
-    fontSize: 9, color: "rgba(255,255,255,0.2)", fontWeight: 500,
-  },
+  boiLabel: { fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.55)" },
+  boiDiff:  { fontSize: 13, fontWeight: 800 },
 
   /* DNA BAR */
-  dna: { padding: "10px 22px 10px", borderBottom: "1px solid rgba(255,255,255,0.04)" },
-  dnaBar: {
-    display: "flex", height: 5, borderRadius: 3, overflow: "hidden", gap: 1,
-  },
+  dna:    { padding: "10px 22px", borderBottom: "1px solid rgba(255,255,255,0.04)" },
+  dnaBar: { display: "flex", height: 5, borderRadius: 3, overflow: "hidden", gap: 1 },
 
-  /* ALLOCATION */
-  alloc: { padding: "14px 22px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)" },
-  allocHead: {
-    display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 11,
+  /* SECTION */
+  section: {
+    padding: "16px 22px",
+    borderBottom: "1px solid rgba(255,255,255,0.04)",
   },
-  allocTitle: {
-    fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
-    textTransform: "uppercase", color: "rgba(99,102,241,0.75)",
-  },
-  allocLegend: { fontSize: 9, color: "rgba(255,255,255,0.2)", fontWeight: 500 },
-
-  aRow:  { display: "flex", alignItems: "center", gap: 8, marginBottom: 7 },
-  aLabel: { display: "flex", alignItems: "center", gap: 5, width: 88, flexShrink: 0 },
-  aName: { fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.42)", whiteSpace: "nowrap" },
-  aBarWrap: { flex: 1, position: "relative", height: 7, borderRadius: 4, overflow: "hidden" },
-  aTrack: { position: "absolute", inset: 0, background: "rgba(255,255,255,0.05)", borderRadius: 4 },
-  aGovMark: {
-    position: "absolute", top: 1, bottom: 1,
-    width: 2, background: "rgba(255,255,255,0.22)",
-    transform: "translateX(-50%)", borderRadius: 1, zIndex: 2,
-  },
-  aFill:   { position: "absolute", top: 0, left: 0, bottom: 0, borderRadius: 4 },
-  aRight:  {
-    width: 56, flexShrink: 0,
-    display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4,
-  },
-  aVal:    { fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)" },
-  aDelta:  { fontSize: 9, fontWeight: 800 },
-  aDeltaNc:{ fontSize: 9, color: "#1E293B", fontWeight: 600 },
-
-  /* SMART ANALYSIS */
-  analysis: { padding: "14px 22px 16px", borderTop: "1px solid rgba(255,255,255,0.04)" },
   sectionLabel: {
     fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
-    textTransform: "uppercase", color: "rgba(99,102,241,0.75)", marginBottom: 10,
+    textTransform: "uppercase", color: "rgba(99,102,241,0.9)", marginBottom: 12,
   },
+
+  /* STAT GRID */
+  statGrid:  { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
+  statBlock: {
+    background: "rgba(255,255,255,0.025)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    borderRadius: 12, padding: "12px 14px",
+  },
+  statLabel: {
+    fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.5)",
+    letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 14, fontWeight: 800, color: "rgba(255,255,255,0.85)",
+    letterSpacing: "-0.01em", lineHeight: 1.3,
+  },
+  statSub: { fontSize: 10, fontWeight: 500, marginTop: 4, lineHeight: 1.4 },
+
+  /* PRIORITY SUMMARY */
+  prioritySummary: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 },
+  priorityBlock: { padding: "14px 16px", borderRadius: 12, border: "1px solid" },
+  priorityBlockLabel: {
+    fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
+    marginBottom: 10,
+  },
+  priorityItemRow: {
+    display: "flex", alignItems: "center", gap: 12, padding: "9px 0",
+  },
+  priorityEmoji: { fontSize: 22, lineHeight: 1, flexShrink: 0, width: 28, textAlign: "center" },
+  priorityItemName: {
+    fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em",
+  },
+  priorityItemDelta: { fontSize: 12, fontWeight: 700, direction: "ltr", flexShrink: 0 },
+  prioritySep: { height: 1, background: "rgba(255,255,255,0.05)", margin: "0 0 0 40px" },
+
+  /* BARS SUB-LABEL */
+  barsSubLabel: {
+    fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.4)",
+    letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 12,
+  },
+
+  /* BUDGET BARS */
+  barGroupHead: {
+    display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8,
+  },
+  barGroupLabel: {
+    fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
+  },
+  barGroupCount: {
+    fontSize: 9, color: "rgba(255,255,255,0.35)", fontWeight: 500,
+  },
+  barRow: {
+    display: "flex", alignItems: "center", gap: 10, marginBottom: 6,
+  },
+  barLabelWrap: {
+    display: "flex", alignItems: "center", gap: 5,
+    width: 88, flexShrink: 0,
+  },
+  barName: {
+    fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.65)",
+    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+  },
+  barTrackOuter: {
+    flex: 1, height: 8, borderRadius: 4,
+    background: "rgba(255,255,255,0.05)", overflow: "hidden",
+  },
+  barDelta: {
+    width: 36, flexShrink: 0,
+    fontSize: 11, fontWeight: 800,
+    direction: "ltr", textAlign: "right", whiteSpace: "nowrap",
+  },
+  unchangedRow: {
+    paddingTop: 10, marginTop: 4,
+    borderTop: "1px solid rgba(255,255,255,0.04)",
+  },
+  unchangedTitle: {
+    fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.2)",
+    letterSpacing: "0.06em", textTransform: "uppercase",
+  },
+  unchangedList: {
+    fontSize: 9.5, color: "rgba(255,255,255,0.2)", fontWeight: 500, lineHeight: 1.7,
+  },
+
+  /* ANALYSIS */
+  analysis: { padding: "16px 22px", borderTop: "1px solid rgba(255,255,255,0.04)" },
   analysisParagraph: {
-    margin: 0,
-    fontSize: 12.5,
-    lineHeight: 1.8,
-    color: "rgba(255,255,255,0.55)",
-    fontWeight: 500,
-    textAlign: "right",
+    margin: 0, fontSize: 12.5, lineHeight: 1.8,
+    color: "rgba(255,255,255,0.55)", fontWeight: 500, textAlign: "right",
   },
 
   /* CARD FOOTER */
   cardFooter: {
-    display: "flex", justifyContent: "space-between",
-    padding: "11px 22px",
-    borderTop: "1px solid rgba(255,255,255,0.05)",
-    fontSize: 10,
+    padding: "11px 22px", borderTop: "1px solid rgba(255,255,255,0.05)", fontSize: 10,
   },
   footerCta: { color: "#6366F1", fontWeight: 700 },
-  footerUrl: { color: "rgba(255,255,255,0.16)" },
 
   /* ACTIONS */
   actions: { display: "flex", flexDirection: "column", gap: 10 },

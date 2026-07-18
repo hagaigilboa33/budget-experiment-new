@@ -113,7 +113,7 @@ export default function LandingScreen({ onStart }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
             >
-              <div style={S.headlineMain}>מונית לשר האוצר</div>
+              <div style={S.headlineMain}>את.ה שר האוצר</div>
               <div style={S.headlineSub}>הבא של ישראל</div>
             </motion.div>
           )}
@@ -129,7 +129,7 @@ export default function LandingScreen({ onStart }) {
               transition={{ duration: 0.6 }}
             >
               יש לך <strong style={{ color: "#f1f5f9" }}>613 מיליארד שקל</strong> ו-2 דקות.
-              <br />קבע את סדר העדיפויות הבא של ישראל.
+              <br />קבע.י את סדר העדיפויות הבא של ישראל.
             </motion.p>
           )}
         </AnimatePresence>
