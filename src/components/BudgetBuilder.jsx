@@ -310,6 +310,14 @@ function CompactSlider({ cat, value, onChange }) {
 
   useEffect(() => () => { if (cleanupFn.current) cleanupFn.current(); }, []);
 
+  // Attach non-passive touchstart so e.preventDefault() works (prevents page scroll during drag)
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    return () => el.removeEventListener("touchstart", onTouchStart);
+  }, []);
+
   const getVal = clientX => {
     const r = trackRef.current.getBoundingClientRect();
     return cat.min + Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * (cat.max - cat.min);
@@ -336,9 +344,10 @@ function CompactSlider({ cat, value, onChange }) {
   };
 
   const onTouchStart = e => {
+    e.preventDefault();
     dragging.current = true;
     onChange(getVal(e.touches[0].clientX), cat.id);
-    const tm = e => { if (dragging.current) onChange(getVal(e.touches[0].clientX), cat.id); };
+    const tm = e => { e.preventDefault(); if (dragging.current) onChange(getVal(e.touches[0].clientX), cat.id); };
     const tu = () => {
       dragging.current = false;
       window.removeEventListener("touchmove", tm);
@@ -350,7 +359,7 @@ function CompactSlider({ cat, value, onChange }) {
       window.removeEventListener("touchmove", tm);
       window.removeEventListener("touchend",  tu);
     };
-    window.addEventListener("touchmove", tm, { passive: true });
+    window.addEventListener("touchmove", tm, { passive: false });
     window.addEventListener("touchend",  tu);
   };
 
@@ -359,7 +368,6 @@ function CompactSlider({ cat, value, onChange }) {
       ref={trackRef}
       style={css.sliderTrack}
       onMouseDown={onMouseDown}
-      onTouchStart={onTouchStart}
     >
       {/* Groove */}
       <div style={css.sliderGroove} />

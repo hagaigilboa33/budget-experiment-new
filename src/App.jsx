@@ -25,8 +25,8 @@ export default function App() {
     setScreen("builder");
   }, []);
 
-  const handleFinish  = useCallback(() => setScreen("result"), []);
-  const handleTimeout = useCallback(() => setScreen("fired"),  []);
+  const handleFinish  = useCallback(() => { window.scrollTo({ top: 0, behavior: "instant" }); setScreen("result"); }, []);
+  const handleTimeout = useCallback(() => { window.scrollTo({ top: 0, behavior: "instant" }); setScreen("fired");  }, []);
 
   const handleRestart = useCallback(() => {
     setValues(initValues());
