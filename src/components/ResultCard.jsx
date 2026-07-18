@@ -297,6 +297,10 @@ export default function ResultCard({ values, name, onRestart, totalBudget = 613,
     setSaving(false);
   };
 
+  /* Share helpers */
+  const shareUrl = window.location.href;
+  const shareText = [`🇮🇱 בניתי את תקציב המדינה שלי לשנת 2027`,`גירעון: ${deficit}% | יעד בנק ישראל: ${BOI_TARGET}%`,`בנה גם אתה 👇`,shareUrl].join("\n");
+
   /* WhatsApp */
   const handleWhatsApp = () => {
     const top = withDelta
@@ -304,14 +308,38 @@ export default function ResultCard({ values, name, onRestart, totalBudget = 613,
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
       .slice(0, 2);
     const lines = [
-      `🇮🇱 בניתי את תקציב המדינה שלי עם כלכליסט`,
+      `🇮🇱 בניתי את תקציב המדינה שלי לשנת 2027`,
       ``,
       `גירעון: ${deficit}% | יעד בנק ישראל: ${BOI_TARGET}%`,
       ...top.map(c => `${c.delta > 0 ? "📈" : "📉"} ${c.shortLabel}: ${c.delta > 0 ? "+" : ""}${c.delta} מיליארד ₪`),
       ``,
       `בנה גם אתה 👇`,
+      shareUrl,
     ].join("\n");
     window.open(`https://wa.me/?text=${encodeURIComponent(lines)}`, "_blank");
+  };
+
+  /* Telegram */
+  const handleTelegram = () => {
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, "_blank");
+  };
+
+  /* Facebook */
+  const handleFacebook = () => {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank");
+  };
+
+  /* Instagram — no direct URL; use Web Share API or copy link */
+  const handleInstagram = async () => {
+    if (navigator.share) {
+      try { await navigator.share({ title: `התקציב של ${name}`, text: shareText, url: shareUrl }); }
+      catch (e) { /* cancelled */ }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        alert("הלינק הועתק! פתח את Instagram ושתף בסטורי או בביו");
+      } catch (e) { alert("העתק את הלינק ושתף ב-Instagram: " + shareUrl); }
+    }
   };
 
   return (
@@ -461,14 +489,29 @@ export default function ResultCard({ values, name, onRestart, totalBudget = 613,
 
         {/* SHARE BUTTONS */}
         <div style={S.actions}>
-          <motion.button
-            style={{ ...S.btn, ...S.btnWa }}
-            whileHover={{ scale: 1.02, boxShadow: "0 8px 32px rgba(37,211,102,0.35)" }}
-            whileTap={{ scale: 0.97 }}
-            onClick={handleWhatsApp}
-          >
-            <span>💬</span> שתף ב-WhatsApp
-          </motion.button>
+          <div style={S.shareLabel}>שתף את התקציב שלך</div>
+          <div style={S.socialGrid}>
+            <motion.button style={{ ...S.socialBtn, background: "#25D366" }}
+              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={handleWhatsApp}>
+              <span style={S.socialIcon}>💬</span>
+              <span style={S.socialLabel}>WhatsApp</span>
+            </motion.button>
+            <motion.button style={{ ...S.socialBtn, background: "#229ED9" }}
+              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={handleTelegram}>
+              <span style={S.socialIcon}>✈️</span>
+              <span style={S.socialLabel}>Telegram</span>
+            </motion.button>
+            <motion.button style={{ ...S.socialBtn, background: "#1877F2" }}
+              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={handleFacebook}>
+              <span style={S.socialIcon}>👍</span>
+              <span style={S.socialLabel}>Facebook</span>
+            </motion.button>
+            <motion.button style={{ ...S.socialBtn, background: "linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)" }}
+              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={handleInstagram}>
+              <span style={S.socialIcon}>📷</span>
+              <span style={S.socialLabel}>Instagram</span>
+            </motion.button>
+          </div>
           <motion.button
             style={{ ...S.btn, ...S.btnSave }}
             whileHover={{ scale: 1.02, boxShadow: "0 8px 32px rgba(99,102,241,0.35)" }}
@@ -660,6 +703,20 @@ const S = {
 
   /* ACTIONS */
   actions: { display: "flex", flexDirection: "column", gap: 10 },
+  shareLabel: {
+    fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.35)",
+    letterSpacing: "0.1em", textTransform: "uppercase", textAlign: "center", marginBottom: 2,
+  },
+  socialGrid: {
+    display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
+  },
+  socialBtn: {
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    gap: 5, padding: "12px 8px", borderRadius: 14, border: "none", cursor: "pointer",
+    color: "#fff",
+  },
+  socialIcon: { fontSize: 22, lineHeight: 1 },
+  socialLabel: { fontSize: 11, fontWeight: 700, letterSpacing: "-0.01em" },
   btn: {
     width: "100%", padding: "15px", borderRadius: 14,
     fontSize: 15, fontWeight: 700, border: "none",
