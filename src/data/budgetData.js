@@ -631,7 +631,7 @@ export const CATEGORIES = [
     color: "#64748B",
     current: 1,
     min: 0.5,
-    max: 2,
+    max: 5,
     insights: {
       decrease: [
         { threshold: -0.2, severity: "warning",  text: "פחות תקציב לכנסת. חברי הכנסת ייסגרו בלי קיוסק? לא בדיוק." },
