@@ -171,6 +171,9 @@ export default function BudgetScreen({ onBudgetSet }) {
           </div>
         </motion.div>
 
+        {/* Slider hint */}
+        <div style={S.sliderHint}>הזז את המחוון כדי לקבוע את גובה התקציב</div>
+
         {/* Slider */}
         <motion.div
           initial={{ opacity: 0, y: 14 }}
@@ -558,6 +561,14 @@ const S = {
     marginBottom: 14,
   },
   sliderEndText: { fontSize: 11, color: "rgba(255,255,255,0.18)", fontWeight: 500 },
+  sliderHint: {
+    textAlign: "center",
+    fontSize: 12,
+    color: "rgba(255,255,255,0.3)",
+    fontWeight: 500,
+    marginBottom: 10,
+    letterSpacing: "0.02em",
+  },
 
   statusBar: {
     padding: "12px 18px",
